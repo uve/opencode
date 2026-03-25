@@ -14,6 +14,9 @@ import { ShareNext } from "@/share/share-next"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is required but not set. Add it to your .env file or local config.")
+  }
   await Plugin.init()
   ShareNext.init()
   Format.init()

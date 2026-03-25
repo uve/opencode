@@ -1244,8 +1244,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault()
       if (event.repeat) return
-      if (
-        working() &&
+
+      const status = voice()
+      if (status === "recording") {
+        toggleRecording()
+        return
+      }
+      if (status === "transcribing") return
+
+      const empty =
         prompt
           .current()
           .map((part) => ("content" in part ? part.content : ""))
@@ -1253,9 +1260,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           .trim().length === 0 &&
         imageAttachments().length === 0 &&
         commentCount() === 0
-      ) {
+
+      if (empty && !working() && store.mode === "normal") {
+        toggleRecording()
         return
       }
+
+      if (working() && empty) return
       handleSubmit(event)
     }
   }
@@ -1394,7 +1405,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               }}
             />
 
-            <div class="flex items-center gap-1 pointer-events-auto">
+            <div class="flex items-center gap-3 pointer-events-auto">
               <Tooltip placement="top" inactive={!prompt.dirty() && !working()} value={tip()}>
                 <IconButton
                   data-action="prompt-submit"

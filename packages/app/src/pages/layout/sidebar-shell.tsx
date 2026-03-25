@@ -108,6 +108,18 @@ export const SidebarContent = (props: {
               aria-label={props.helpLabel()}
             />
           </Tooltip>
+          <Show when={props.onRestart}>
+            <Tooltip placement={placement()} value="Restart">
+              <IconButton
+                icon="reload"
+                variant="ghost"
+                size="large"
+                onClick={props.onRestart}
+                aria-label="Restart"
+                style={{ color: "#ef4444" }}
+              />
+            </Tooltip>
+          </Show>
         </div>
       </div>
 

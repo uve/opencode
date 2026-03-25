@@ -1,6 +1,7 @@
 import { describeRoute, resolver } from "hono-openapi"
 import { Hono } from "hono"
 import { proxy } from "hono/proxy"
+import { serveStatic } from "hono/bun"
 import z from "zod"
 import { createHash } from "node:crypto"
 import { Log } from "../util/log"
@@ -249,6 +250,16 @@ export const InstanceRoutes = (app?: Hono) =>
       },
     )
     .all("/*", async (c) => {
+      const appDir = process.env.OPENCODE_APP_DIR
+      if (appDir) {
+        const noop = async () => {}
+        const serve = serveStatic({ root: appDir, rewriteRequestPath: (p) => p })
+        const res = await serve(c, noop)
+        if (res) return res
+        const fallback = serveStatic({ root: appDir, path: "/index.html" })
+        return (await fallback(c, noop)) ?? c.notFound()
+      }
+
       const embeddedWebUI = await embeddedUIPromise
       const path = c.req.path
 

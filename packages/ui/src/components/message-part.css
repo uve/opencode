@@ -827,7 +827,7 @@
   flex-direction: column;
   gap: 0;
   min-height: 0;
-  max-height: var(--question-prompt-max-height, 100dvh);
+  max-height: var(--question-prompt-max-height, 80dvh);
 
   [data-slot="question-body"] {
     display: flex;

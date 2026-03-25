@@ -61,7 +61,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar } from "./sidebar"
-import { SubagentFooter } from "./subagent-footer.tsx"
+import { SessionsSidebar } from "./sidebar-sessions"
 import { Flag } from "@/flag/flag"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import parsers from "../../../../../../parsers-config.ts"
@@ -148,6 +148,8 @@ export function Session() {
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
+  const [sessionsSidebar, setSessionsSidebar] = kv.signal<"auto" | "hide">("sessions_sidebar", "hide")
+  const [sessionsSidebarOpen, setSessionsSidebarOpen] = createSignal(false)
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
   const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
@@ -165,8 +167,13 @@ export function Session() {
     if (sidebar() === "auto" && wide()) return true
     return false
   })
+  const sessionsSidebarVisible = createMemo(() => {
+    if (sessionsSidebarOpen()) return true
+    if (sessionsSidebar() === "auto" && wide()) return true
+    return false
+  })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - (sessionsSidebarVisible() ? 38 : 0) - 4)
 
   const scrollAcceleration = createMemo(() => {
     const tui = tuiConfig
@@ -573,6 +580,20 @@ export function Session() {
           const isVisible = sidebarVisible()
           setSidebar(() => (isVisible ? "hide" : "auto"))
           setSidebarOpen(!isVisible)
+        })
+        dialog.clear()
+      },
+    },
+    {
+      title: sessionsSidebarVisible() ? "Hide sessions sidebar" : "Show sessions sidebar",
+      value: "session.sessions_sidebar.toggle",
+      keybind: "sessions_sidebar_toggle",
+      category: "Session",
+      onSelect: (dialog) => {
+        batch(() => {
+          const isVisible = sessionsSidebarVisible()
+          setSessionsSidebar(() => (isVisible ? "hide" : "auto"))
+          setSessionsSidebarOpen(!isVisible)
         })
         dialog.clear()
       },
@@ -1035,7 +1056,27 @@ export function Session() {
       }}
     >
       <box flexDirection="row">
-        <box flexGrow={1} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
+        <Show when={sessionsSidebarVisible()}>
+          <Switch>
+            <Match when={wide()}>
+              <SessionsSidebar />
+            </Match>
+            <Match when={!wide()}>
+              <box
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+                zIndex={1}
+                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
+              >
+                <SessionsSidebar overlay />
+              </box>
+            </Match>
+          </Switch>
+        </Show>
+        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
             <scrollbox
               ref={(r) => (scroll = r)}

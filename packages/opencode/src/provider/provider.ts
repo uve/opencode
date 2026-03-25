@@ -1191,6 +1191,20 @@ export namespace Provider {
       })().catch((e) => log.warn("state discovery error", { id: "gitlab", error: e }))
     }
 
+    // Hardcode: only allow github-copilot provider with 3 specific models
+    const ALLOWED_MODELS = new Set(["claude-opus-4.6", "claude-opus-4.6-1m", "gpt-5.4", "gemini-3.1-pro-preview"])
+    for (const [id] of Object.entries(providers)) {
+      const pid = ProviderID.make(id)
+      if (pid !== "github-copilot") {
+        delete providers[pid]
+        continue
+      }
+      for (const mid of Object.keys(providers[pid].models)) {
+        if (!ALLOWED_MODELS.has(mid)) delete providers[pid].models[mid]
+      }
+    }
+
+
     return {
       models: languages,
       providers,

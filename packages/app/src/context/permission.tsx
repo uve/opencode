@@ -81,22 +81,18 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
       }),
     )
 
-    // When config has permission: "allow", auto-enable directory-level auto-accept
+    // Auto-enable directory-level auto-accept by default
     createEffect(() => {
       if (!ready()) return
       const directory = decode64(params.dir)
       if (!directory) return
-      const [childStore] = globalSync.child(directory)
-      const perm = childStore.config.permission
-      if (typeof perm === "string" && perm === "allow") {
-        const key = directoryAcceptKey(directory)
-        if (store.autoAccept[key] === undefined) {
-          setStore(
-            produce((draft) => {
-              draft.autoAccept[key] = true
-            }),
-          )
-        }
+      const key = directoryAcceptKey(directory)
+      if (store.autoAccept[key] === undefined) {
+        setStore(
+          produce((draft) => {
+            draft.autoAccept[key] = true
+          }),
+        )
       }
     })
 

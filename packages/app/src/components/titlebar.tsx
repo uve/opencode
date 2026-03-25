@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup, Show, untrack } from "solid-js"
+import { createEffect, createMemo, createResource, onCleanup, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -50,6 +50,38 @@ export function Titlebar() {
   const web = createMemo(() => platform.platform === "web")
   const zoom = () => platform.webviewZoom?.() ?? 1
   const minHeight = () => (mac() ? `${40 / zoom()}px` : undefined)
+
+  const auth = createMemo((): Record<string, string> => {
+    const pw = server.current?.http.password
+    if (!pw) return {}
+    return { Authorization: `Basic ${btoa(`${server.current?.http.username ?? "opencode"}:${pw}`)}` }
+  })
+
+  const [timestamp, { refetch }] = createResource(async () => {
+    try {
+      const res = await fetch(`${server.current?.http.url}/experimental/version`, { headers: auth() })
+      if (!res.ok) return ""
+      const data = (await res.json()) as { timestamp?: string }
+      if (!data.timestamp) return ""
+      const d = new Date(data.timestamp)
+      if (isNaN(d.getTime())) return ""
+      return d.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+    } catch {
+      return ""
+    }
+  })
+
+  const onVisibility = () => {
+    if (document.visibilityState === "visible") refetch()
+  }
+  document.addEventListener("visibilitychange", onVisibility)
+  onCleanup(() => document.removeEventListener("visibilitychange", onVisibility))
 
   const [history, setHistory] = createStore({
     stack: [] as string[],
@@ -286,7 +318,14 @@ export function Titlebar() {
             </Show>
           </div>
         </div>
-        <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
+        <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2">
+          <Show when={server.health?.()?.version}>
+            {(version) => <span class="text-text-weak text-11-regular truncate select-none">v{version()}</span>}
+          </Show>
+          <Show when={timestamp()}>
+            {(ts) => <span class="text-text-weak text-11-regular truncate select-none">{ts()}</span>}
+          </Show>
+        </div>
       </div>
 
       <div class="min-w-0 flex items-center justify-center pointer-events-none">
@@ -302,6 +341,22 @@ export function Titlebar() {
         onMouseDown={drag}
       >
         <div id="opencode-titlebar-right" class="flex items-center gap-1 shrink-0 justify-end" />
+        <TooltipKeybind
+          class="flex shrink-0 mr-1"
+          placement="bottom"
+          title="Toggle sessions sidebar"
+          keybind={command.keybind("sessionsSidebar.toggle")}
+        >
+          <Button
+            variant="ghost"
+            class="group/sessions-toggle titlebar-icon w-8 h-6 p-0 box-border"
+            onClick={layout.sessionsSidebar.toggle}
+            aria-label="Toggle sessions sidebar"
+            aria-expanded={layout.sessionsSidebar.opened()}
+          >
+            <Icon size="small" name={layout.sessionsSidebar.opened() ? "sidebar-right-active" : "sidebar-right"} />
+          </Button>
+        </TooltipKeybind>
         <Show when={windows()}>
           {!tauriApi() && <div class="w-36 shrink-0" />}
           <div data-tauri-decorum-tb class="flex flex-row" />

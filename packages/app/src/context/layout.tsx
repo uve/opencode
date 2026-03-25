@@ -13,7 +13,8 @@ import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 import { createPathHelpers } from "./file/path"
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
-const DEFAULT_SIDEBAR_WIDTH = 344
+const DEFAULT_PANEL_WIDTH = 344
+const DEFAULT_SIDEBAR_WIDTH = 480
 const DEFAULT_FILE_TREE_WIDTH = 200
 const DEFAULT_SESSION_WIDTH = 600
 const DEFAULT_TERMINAL_HEIGHT = 280
@@ -148,12 +149,23 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       const sidebar = value.sidebar
       const migratedSidebar = (() => {
         if (!isRecord(sidebar)) return sidebar
-        if (typeof sidebar.workspaces !== "boolean") return sidebar
-        return {
-          ...sidebar,
-          workspaces: {},
-          workspacesDefault: sidebar.workspaces,
+
+        let result = sidebar
+
+        if (typeof result.workspaces === "boolean") {
+          result = {
+            ...result,
+            workspaces: {},
+            workspacesDefault: result.workspaces,
+          }
         }
+
+        const width = typeof result.width === "number" ? result.width : DEFAULT_SIDEBAR_WIDTH
+        if (width <= DEFAULT_PANEL_WIDTH) {
+          result = { ...result, width: DEFAULT_SIDEBAR_WIDTH }
+        }
+
+        return result
       })()
 
       const review = value.review
@@ -253,6 +265,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         mobileSidebar: {
           opened: false,
+        },
+        sessionsSidebar: {
+          opened: false,
+          width: 260,
         },
         sessionTabs: {} as Record<string, SessionTabs>,
         sessionView: {} as Record<string, SessionView>,
@@ -701,6 +717,30 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         toggle() {
           setStore("mobileSidebar", "opened", (x) => !x)
+        },
+      },
+      sessionsSidebar: {
+        opened: createMemo(() => store.sessionsSidebar?.opened ?? false),
+        width: createMemo(() => store.sessionsSidebar?.width ?? 260),
+        open() {
+          setStore("sessionsSidebar", "opened", true)
+        },
+        close() {
+          setStore("sessionsSidebar", "opened", false)
+        },
+        toggle() {
+          if (!store.sessionsSidebar) {
+            setStore("sessionsSidebar", { opened: true, width: 260 })
+            return
+          }
+          setStore("sessionsSidebar", "opened", (x) => !x)
+        },
+        resize(width: number) {
+          if (!store.sessionsSidebar) {
+            setStore("sessionsSidebar", { opened: true, width })
+            return
+          }
+          setStore("sessionsSidebar", "width", width)
         },
       },
       pendingMessage: {
