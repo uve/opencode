@@ -115,6 +115,7 @@ function SessionRow(props: {
   active: boolean
   archiveSession: (session: Session) => Promise<void>
 }): JSX.Element {
+  const layout = useLayout()
   const globalSync = useGlobalSync()
   const notification = useNotification()
   const language = useLanguage()
@@ -124,11 +125,7 @@ function SessionRow(props: {
   const status = createMemo(() => sessionStore.session_status[props.session.id])
   const isWorking = createMemo(() => {
     const s = status()
-    return (
-      s?.type === "busy" ||
-      s?.type === "retry" ||
-      (s !== undefined && s.type !== "idle")
-    )
+    return s?.type === "busy" || s?.type === "retry" || (s !== undefined && s.type !== "idle")
   })
   const isDone = createMemo(() => status()?.type === "idle")
 
@@ -165,9 +162,7 @@ function SessionRow(props: {
               </Match>
             </Switch>
           </div>
-          <span class="text-13-regular text-text-strong min-w-0 flex-1 truncate">
-            {props.session.title}
-          </span>
+          <span class="text-13-regular text-text-strong min-w-0 flex-1 truncate">{props.session.title}</span>
           <span class="shrink-0 text-11-regular text-text-dimmed">{timeAgo(updatedAt())}</span>
         </A>
         <div class="shrink-0 pr-1">

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Fetch upstream, rebase local changes, rebuild and deploy.
+# Fetch upstream/dev, apply custom patch on top, rebuild and deploy.
+# Strategy: save patch → reset to upstream → apply patch → verify → deploy.
+# If patch fails, abort and tell the user to run /update for AI-assisted resolution.
 # Usage: bash cmd/autoupdate.sh
 set -euo pipefail
 
@@ -42,54 +44,93 @@ else
   log "no changes to amend"
 fi
 
-# ── 2. Fetch upstream ───────────────────────────────────────────
+# ── 2. Save current custom patch ─────────────────────────────────
+PATCH="/tmp/opencode-fork-patch.diff"
+MSG="/tmp/opencode-fork-message.txt"
+log "saving custom patch..."
+git diff HEAD~1 HEAD > "$PATCH"
+git log -1 --format='%s' > "$MSG"
+PATCH_LINES=$(wc -l < "$PATCH")
+log "patch saved ($PATCH_LINES lines)"
+
+# ── 3. Fetch upstream ────────────────────────────────────────────
 log "fetching upstream/dev..."
 git fetch upstream dev
 
-# ── 3. Rebase onto upstream/dev ──────────────────────────────────
-log "rebasing onto upstream/dev..."
-if git rebase upstream/dev; then
-  log "rebase succeeded"
-else
-  log "rebase conflict — auto-resolving lockfiles..."
-
-  MAX=10
-  for i in $(seq 1 $MAX); do
-    [ ! -d .git/rebase-merge ] && [ ! -d .git/rebase-apply ] && break
-
-    CONFLICTS=$(git diff --name-only --diff-filter=U || true)
-    if [ -z "$CONFLICTS" ]; then
-      GIT_EDITOR=true git rebase --continue && break || continue
-    fi
-
-    log "attempt $i/$MAX — conflicts: $CONFLICTS"
-
-    # auto-resolve lockfiles
-    for f in $CONFLICTS; do
-      case "$f" in
-        bun.lock|*/bun.lock|package-lock.json|*/package-lock.json)
-          git checkout --theirs "$f" && git add "$f"
-          log "auto-resolved lockfile: $f"
-          ;;
-      esac
-    done
-
-    # remaining conflicts — abort if can't resolve
-    REMAINING=$(git diff --name-only --diff-filter=U || true)
-    if [ -n "$REMAINING" ]; then
-      log "ERROR: unresolved conflicts: $REMAINING"
-      git rebase --abort
-      exit 1
-    fi
-
-    GIT_EDITOR=true git rebase --continue 2>/dev/null || true
-  done
-
-  log "rebase complete"
+# ── 4. Check if update needed ────────────────────────────────────
+BASE=$(git rev-parse HEAD~1)
+UPSTREAM=$(git rev-parse upstream/dev)
+if [ "$BASE" = "$UPSTREAM" ]; then
+  log "already up to date (base=$BASE)"
+  log "=== autoupdate complete (no changes) ==="
+  exit 0
 fi
 
-# ── 4. Build & deploy ───────────────────────────────────────────
-log "running deploy..."
-bash cmd/deploy.sh
+NEW_COMMITS=$(git log "$BASE".."$UPSTREAM" --oneline | wc -l)
+log "upstream has $NEW_COMMITS new commits"
+
+# ── 5. Reset to upstream/dev ─────────────────────────────────────
+OLD_HEAD=$(git rev-parse HEAD)
+log "resetting to upstream/dev ($UPSTREAM)..."
+git reset --hard upstream/dev
+
+# ── 6. Apply custom patch ────────────────────────────────────────
+log "applying custom patch..."
+if git apply --3way "$PATCH" 2>/tmp/opencode-apply.log; then
+  log "patch applied cleanly"
+else
+  log "patch apply failed with --3way, trying --reject..."
+  git reset --hard upstream/dev
+
+  if git apply --reject --whitespace=fix "$PATCH" 2>/tmp/opencode-reject.log; then
+    log "patch applied with some rejects"
+  else
+    log "patch applied with rejects (some hunks failed)"
+  fi
+
+  # Check for .rej files
+  REJECTS=$(find . -name '*.rej' -not -path './.git/*' 2>/dev/null || true)
+  if [ -n "$REJECTS" ]; then
+    log "ERROR: unresolved reject files:"
+    echo "$REJECTS" | while read -r f; do log "  $f"; done
+    log ""
+    log "MANUAL RESOLUTION REQUIRED."
+    log "Run /update in OpenCode for AI-assisted conflict resolution."
+    log "Or restore previous state: git reset --hard $OLD_HEAD"
+    # Clean up rejects
+    echo "$REJECTS" | xargs rm -f 2>/dev/null || true
+    git reset --hard "$OLD_HEAD"
+    exit 1
+  fi
+fi
+
+# ── 7. Install deps (regenerate lockfile) ────────────────────────
+log "installing dependencies..."
+bun install --frozen-lockfile 2>/dev/null || bun install
+
+# ── 8. Commit as single commit ───────────────────────────────────
+log "committing..."
+git add -A
+COMMIT_MSG=$(cat "$MSG")
+git commit -m "$COMMIT_MSG"
+
+# ── 9. Verify custom patches ────────────────────────────────────
+log "verifying custom patches..."
+if bash cmd/verify-custom.sh; then
+  log "all custom patches verified"
+else
+  log "WARNING: some custom patches are missing!"
+  log "Run /update in OpenCode for AI-assisted repair."
+  log "Or restore previous state: git reset --hard $OLD_HEAD"
+  # Don't abort — deploy anyway, but warn
+fi
+
+# ── 10. Push ─────────────────────────────────────────────────────
+log "pushing to origin..."
+git push origin main --force-with-lease 2>/dev/null || log "WARNING: push failed (will retry next run)"
+
+# ── 11. Build & deploy ───────────────────────────────────────────
+log "running build..."
+bash cmd/build.sh
 
 log "=== autoupdate complete ==="

@@ -1830,7 +1830,7 @@ export default function Layout(props: ParentProps) {
 
   const side = createMemo(() => Math.max(layout.sidebar.width(), 244))
   const panel = createMemo(() => Math.max(side() - 64, 0))
-  const rightSide = createMemo(() => layout.sessionsSidebar.opened() ? layout.sessionsSidebar.width() : 0)
+  const rightSide = createMemo(() => (layout.sessionsSidebar.opened() ? layout.sessionsSidebar.width() : 0))
 
   const loadedSessionDirs = new Set<string>()
 
@@ -2414,7 +2414,7 @@ export default function Layout(props: ParentProps) {
                 arm()
               }}
             >
-              <div class="@container w-full h-full contain-strict">{sidebarContent()}</div>
+              <div class="@container w-full h-full">{sidebarContent()}</div>
             </nav>
 
             <Show when={layout.sidebar.opened()}>
@@ -2423,7 +2423,7 @@ export default function Layout(props: ParentProps) {
                 style={{ left: `${side()}px` }}
                 onPointerDown={() => setState("sizing", true)}
               >
-                 <ResizeHandle
+                <ResizeHandle
                   direction="horizontal"
                   size={layout.sidebar.width()}
                   min={244}
@@ -2473,7 +2473,7 @@ export default function Layout(props: ParentProps) {
                 "absolute inset-0": true,
                 "xl:inset-y-0 xl:right-[var(--main-right)] xl:left-[var(--main-left)]": true,
                 "z-20": true,
-                "transition-[left,right] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[left,right] motion-reduce:transition-none":
+                "transition-[left,right] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none":
                   !state.sizing,
               }}
               style={{
@@ -2483,7 +2483,7 @@ export default function Layout(props: ParentProps) {
             >
               <main
                 classList={{
-                  "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
+                  "size-full overflow-hidden flex flex-col border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
                   "xl:border-r xl:rounded-tr-[12px]": layout.sessionsSidebar.opened(),
                 }}
               >

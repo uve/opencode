@@ -28,6 +28,7 @@ import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
+import { useLayout } from "@/context/layout"
 import { messageAgentColor } from "@/utils/agent"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
 import { makeTimer } from "@solid-primitives/timer"
@@ -228,6 +229,7 @@ export function MessageTimeline(props: {
   const settings = useSettings()
   const dialog = useDialog()
   const language = useLanguage()
+  const layout = useLayout()
   const { params, sessionKey } = useSessionKey()
   const platform = usePlatform()
 
@@ -781,6 +783,11 @@ export function MessageTimeline(props: {
                               <DropdownMenu.Item onSelect={() => void archiveSession(id())}>
                                 <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
                               </DropdownMenu.Item>
+                              <DropdownMenu.Item onSelect={() => layout.prompt.toggle()}>
+                                <DropdownMenu.ItemLabel>
+                                  {layout.prompt.collapsed() ? "Expand input" : "Collapse input"}
+                                </DropdownMenu.ItemLabel>
+                              </DropdownMenu.Item>
                               <DropdownMenu.Separator />
                               <DropdownMenu.Item
                                 onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id()} />)}
@@ -790,6 +797,26 @@ export function MessageTimeline(props: {
                             </DropdownMenu.Content>
                           </DropdownMenu.Portal>
                         </DropdownMenu>
+
+                        <button
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          class="ml-1 flex size-6 shrink-0 items-center justify-center rounded-md cursor-pointer text-icon-weak hover:text-icon-strong hover:bg-surface-base-active transition-colors"
+                          aria-label="Reload page"
+                          title="Reload page"
+                        >
+                          <Icon name="reload" size="small" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => layout.prompt.toggle()}
+                          class="ml-1 flex size-6 shrink-0 items-center justify-center rounded-md cursor-pointer text-icon-weak hover:text-icon-strong hover:bg-surface-base-active transition-colors"
+                          aria-label={layout.prompt.collapsed() ? "Expand input" : "Collapse input"}
+                          title={layout.prompt.collapsed() ? "Expand input" : "Collapse input"}
+                        >
+                          <Icon name={layout.prompt.collapsed() ? "expand" : "collapse"} size="small" />
+                        </button>
 
                         <KobaltePopover
                           open={share.open}
@@ -942,10 +969,6 @@ export function MessageTimeline(props: {
                       classList={{
                         "min-w-0 w-full max-w-full": true,
                         "md:max-w-200 2xl:max-w-[1000px]": props.centered,
-                      }}
-                      style={{
-                        "content-visibility": active() ? undefined : "auto",
-                        "contain-intrinsic-size": active() ? undefined : "auto 500px",
                       }}
                     >
                       <Show when={commentCount() > 0}>

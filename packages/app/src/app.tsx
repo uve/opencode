@@ -41,6 +41,7 @@ import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
 import { SettingsProvider } from "@/context/settings"
 import { TerminalProvider } from "@/context/terminal"
+import { VoiceProvider } from "@/context/voice"
 import DirectoryLayout from "@/pages/directory-layout"
 import Layout from "@/pages/layout"
 import { ErrorPage } from "./pages/error"
@@ -111,7 +112,9 @@ function SessionProviders(props: ParentProps) {
     <TerminalProvider>
       <FileProvider>
         <PromptProvider>
-          <CommentsProvider>{props.children}</CommentsProvider>
+          <VoiceProvider>
+            <CommentsProvider>{props.children}</CommentsProvider>
+          </VoiceProvider>
         </PromptProvider>
       </FileProvider>
     </TerminalProvider>
@@ -283,11 +286,7 @@ export function AppInterface(props: {
   disableHealthCheck?: boolean
 }) {
   return (
-    <ServerProvider
-      defaultServer={props.defaultServer}
-      disableHealthCheck={props.disableHealthCheck}
-      servers={props.servers}
-    >
+    <ServerProvider defaultServer={props.defaultServer} servers={props.servers}>
       <ConnectionGate disableHealthCheck={props.disableHealthCheck}>
         <ServerKey>
           <GlobalSDKProvider>

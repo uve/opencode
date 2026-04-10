@@ -1,5 +1,5 @@
 import { createStore, produce } from "solid-js/store"
-import { batch, createEffect, createMemo, onCleanup, onMount, type Accessor } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, type Accessor } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
@@ -43,6 +43,7 @@ type SessionView = {
   reviewOpen?: string[]
   pendingMessage?: string
   pendingMessageAt?: number
+  collapsed?: boolean
 }
 
 type TabHandoff = {
@@ -277,6 +278,30 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
       }),
     )
+
+    const [collapsed, setCollapsed] = createSignal(false)
+    const [sessionKey, setSessionKey] = createSignal("")
+
+    // Sync collapsed state with per-session storage
+    const syncCollapsed = (key: string) => {
+      if (!key) return
+      const view = store.sessionView[key]
+      setCollapsed(view?.collapsed ?? false)
+    }
+
+    const toggleCollapsed = () => {
+      const next = !collapsed()
+      setCollapsed(next)
+      const key = sessionKey()
+      if (key) {
+        const current = store.sessionView[key]
+        if (!current) {
+          setStore("sessionView", key, { scroll: {}, collapsed: next })
+        } else {
+          setStore("sessionView", key, "collapsed", next)
+        }
+      }
+    }
 
     const MAX_SESSION_KEYS = 50
     const PENDING_MESSAGE_TTL_MS = 2 * 60 * 1000
@@ -560,30 +585,26 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       }
     })
 
-    let sessionFrame: number | undefined
-    let sessionTimer: number | undefined
-
     onMount(() => {
-      sessionFrame = requestAnimationFrame(() => {
-        sessionFrame = undefined
-        sessionTimer = window.setTimeout(() => {
-          sessionTimer = undefined
-          void Promise.all(
-            server.projects.list().map((project) => {
-              return globalSync.project.loadSessions(project.worktree)
-            }),
-          )
-        }, 0)
-      })
-    })
-
-    onCleanup(() => {
-      if (sessionFrame !== undefined) cancelAnimationFrame(sessionFrame)
-      if (sessionTimer !== undefined) window.clearTimeout(sessionTimer)
+      Promise.all(
+        server.projects.list().map((project) => {
+          return globalSync.project.loadSessions(project.worktree)
+        }),
+      )
     })
 
     return {
       ready,
+      prompt: {
+        collapsed: createMemo(() => collapsed()),
+        toggle() {
+          toggleCollapsed()
+        },
+        setSession(key: string) {
+          setSessionKey(key)
+          syncCollapsed(key)
+        },
+      },
       handoff: {
         tabs: createMemo(() => store.handoff?.tabs),
         setTabs(dir: string, id: string) {

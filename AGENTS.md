@@ -3,6 +3,7 @@
 - The default branch in this repo is `dev`.
 - Local `main` ref may not exist; use `dev` or `origin/dev` for diffs.
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
+- To rebuild and restart the server after source changes, run `nohup bash cmd/build.sh &`. The script auto-detects when it runs inside the opencode.service cgroup and re-execs itself via `systemd-run --user --scope` to survive the service restart. Output goes to `.build.log`. For a simple restart without rebuild: `systemctl --user restart opencode.service`.
 
 ## Style Guide
 

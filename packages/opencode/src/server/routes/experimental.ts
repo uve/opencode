@@ -8,7 +8,7 @@ import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { MCP } from "../../mcp"
 import { Session } from "../../session"
-import { zodToJsonSchema } from "zod-to-json-schema"
+import { toJSONSchema } from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { WorkspaceRoutes } from "./workspace"
@@ -80,12 +80,12 @@ export const ExperimentalRoutes = lazy(() =>
         const { provider, model } = c.req.valid("query")
         const tools = await ToolRegistry.tools({ providerID: ProviderID.make(provider), modelID: ModelID.make(model) })
         return c.json(
-          tools.map((t) => ({
-            id: t.id,
-            description: t.description,
-            // Handle both Zod schemas and plain JSON schemas
-            parameters: (t.parameters as any)?._def ? zodToJsonSchema(t.parameters as any) : t.parameters,
-          })),
+          tools.map((t) => {
+            const raw = (t.parameters as any)?._def ? toJSONSchema(t.parameters as any) : t.parameters
+            // Strip $schema and additionalProperties — OpenAI rejects them
+            const { $schema, additionalProperties, ...params } = raw as Record<string, any>
+            return { id: t.id, description: t.description, parameters: params }
+          }),
         )
       },
     )
@@ -287,9 +287,9 @@ export const ExperimentalRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const apiKey = process.env.OPENAI_API_KEY
+        const apiKey = process.env.OPENAI_AUDIO_API_KEY
         if (!apiKey) {
-          return c.json({ error: "OPENAI_API_KEY not set" }, 400)
+          return c.json({ error: "OPENAI_AUDIO_API_KEY not set" }, 400)
         }
         const body = await c.req.formData()
         const file = body.get("file")
@@ -311,58 +311,6 @@ export const ExperimentalRoutes = lazy(() =>
         }
         const data = (await res.json()) as { text: string }
         return c.json({ text: data.text })
-      },
-    )
-    .post(
-      "/restart",
-      describeRoute({
-        summary: "Restart server",
-        description: "Exit process so launchd restarts it (KeepAlive)",
-        operationId: "experimental.restart",
-        responses: {
-          200: {
-            description: "Restart initiated",
-            content: {
-              "application/json": {
-                schema: resolver(z.object({ ok: z.boolean() })),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        setTimeout(() => process.exit(0), 100)
-        return c.json({ ok: true })
-      },
-    )
-    .get(
-      "/version",
-      describeRoute({
-        summary: "Get build version timestamp",
-        description: "Return the timestamp of the second-to-last commit in the current branch",
-        operationId: "experimental.version",
-        responses: {
-          200: {
-            description: "Version timestamp",
-            content: {
-              "application/json": {
-                schema: resolver(z.object({ timestamp: z.string() })),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        const { execSync } = await import("child_process")
-        try {
-          const ts = execSync("git log --format=%ci -n 1 --skip=1", {
-            cwd: process.cwd(),
-            encoding: "utf-8",
-          }).trim()
-          return c.json({ timestamp: ts })
-        } catch {
-          return c.json({ timestamp: "" })
-        }
       },
     ),
 )

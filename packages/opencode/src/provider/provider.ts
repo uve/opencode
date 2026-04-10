@@ -1191,19 +1191,39 @@ export namespace Provider {
       })().catch((e) => log.warn("state discovery error", { id: "gitlab", error: e }))
     }
 
-    // Hardcode: only allow github-copilot provider with 3 specific models
-    const ALLOWED_MODELS = new Set(["claude-opus-4.6", "claude-opus-4.6-1m", "gpt-5.4", "gemini-3.1-pro-preview"])
-    for (const [id] of Object.entries(providers)) {
-      const pid = ProviderID.make(id)
-      if (pid !== "github-copilot") {
-        delete providers[pid]
-        continue
-      }
-      for (const mid of Object.keys(providers[pid].models)) {
-        if (!ALLOWED_MODELS.has(mid)) delete providers[pid].models[mid]
+    // Hardcode: inject claude-opus-4.6-1m (1M context) into github-copilot if not present
+    // This model is available via Copilot CLI but not yet listed in models.dev
+    const copilotID = ProviderID.make("github-copilot")
+    if (providers[copilotID] && !providers[copilotID].models["claude-opus-4.6-1m"]) {
+      const base = providers[copilotID].models["claude-opus-4.6"]
+      if (base) {
+        providers[copilotID].models["claude-opus-4.6-1m"] = {
+          ...base,
+          id: ModelID.make("claude-opus-4.6-1m"),
+          name: "Claude Opus 4.6 (1M)",
+          api: { ...base.api, id: "claude-opus-4.6-1m" },
+          limit: { context: 1000000, input: 900000, output: 64000 },
+        }
       }
     }
 
+    // Hardcode: only allow github-copilot provider with specific models
+    // Set OPENCODE_ALLOW_OPENAI=1 to also allow the openai provider (for e2e testing)
+    const ALLOWED_MODELS = new Set(["claude-opus-4.6", "claude-opus-4.6-1m", "gpt-5.4", "gemini-3.1-pro-preview"])
+    const allowed = new Set<string>(["github-copilot"])
+    if (process.env.OPENCODE_ALLOW_OPENAI === "1") allowed.add("openai")
+    for (const [id] of Object.entries(providers)) {
+      const pid = ProviderID.make(id)
+      if (!allowed.has(pid)) {
+        delete providers[pid]
+        continue
+      }
+      if (pid === "github-copilot") {
+        for (const mid of Object.keys(providers[pid].models)) {
+          if (!ALLOWED_MODELS.has(mid)) delete providers[pid].models[mid]
+        }
+      }
+    }
 
     return {
       models: languages,
@@ -1506,30 +1526,24 @@ export namespace Provider {
   }
 
   export async function defaultModel() {
-    const cfg = await Config.get()
-    if (cfg.model) return parseModel(cfg.model)
-
-    const providers = await list()
-    const recent = (await Filesystem.readJson<{
-      recent?: { providerID: ProviderID; modelID: ModelID }[]
-    }>(path.join(Global.Path.state, "model.json"))
-      .then((x) => (Array.isArray(x.recent) ? x.recent : []))
-      .catch(() => [])) as { providerID: ProviderID; modelID: ModelID }[]
-    for (const entry of recent) {
-      const provider = providers[entry.providerID]
-      if (!provider) continue
-      if (!provider.models[entry.modelID]) continue
-      return { providerID: entry.providerID, modelID: entry.modelID }
-    }
-
-    const provider = Object.values(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
-    if (!provider) throw new Error("no providers found")
-    const [model] = sort(Object.values(provider.models))
-    if (!model) throw new Error("no models found")
+    // Hardcode: always default to Claude Opus 4.6 on github-copilot
     return {
-      providerID: provider.id,
-      modelID: model.id,
+      providerID: ProviderID.make("github-copilot"),
+      modelID: ModelID.make("claude-opus-4.6"),
     }
+  }
+
+  /**
+   * Returns the best (most advanced) thinking variant for a model.
+   * For Claude on github-copilot this is "thinking",
+   * for GPT models the highest reasoning effort,
+   * and undefined for models without variants.
+   */
+  export function bestVariant(model: { variants?: Record<string, any> }): string | undefined {
+    if (!model.variants) return undefined
+    const keys = Object.keys(model.variants)
+    if (keys.length === 0) return undefined
+    return keys[keys.length - 1]
   }
 
   export function parseModel(model: string) {

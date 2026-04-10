@@ -194,7 +194,7 @@ export function TerminalPanel() {
       class="relative w-full shrink-0 overflow-hidden bg-background-stronger"
       classList={{
         "border-t border-border-weak-base": opened(),
-        "transition-[height] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[height] motion-reduce:transition-none":
+        "transition-[height] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none":
           !size.active(),
       }}
       style={{ height: opened() ? `${pane()}px` : "0px" }}

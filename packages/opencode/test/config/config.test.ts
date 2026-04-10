@@ -1664,6 +1664,93 @@ test("MCP config deep merges preserving base config properties", async () => {
   })
 })
 
+test("empty project-level mcp:{} preserves global MCP servers", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      // Base config (simulates global) with MCP servers defined
+      await Filesystem.write(
+        path.join(dir, "opencode.jsonc"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          mcp: {
+            gitlab: {
+              type: "local",
+              command: ["npx", "-y", "@zereight/mcp-gitlab"],
+              environment: {
+                GITLAB_PERSONAL_ACCESS_TOKEN: "test-token",
+                GITLAB_API_URL: "https://gitlab.example.com",
+              },
+              enabled: true,
+            },
+          },
+        }),
+      )
+      // Project config with empty mcp:{} should NOT erase global servers
+      await Filesystem.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          mcp: {},
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      // gitlab should still be present from base config
+      expect(config.mcp?.gitlab).toBeDefined()
+      expect((config.mcp?.gitlab as any)?.type).toBe("local")
+      expect((config.mcp?.gitlab as any)?.enabled).toBe(true)
+      expect((config.mcp?.gitlab as any)?.command).toEqual(["npx", "-y", "@zereight/mcp-gitlab"])
+    },
+  })
+})
+
+test("project config with disabled mcp server overrides global enabled", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      // Global config with enabled MCP server
+      await Filesystem.write(
+        path.join(dir, "opencode.jsonc"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          mcp: {
+            gitlab: {
+              type: "local",
+              command: ["npx", "-y", "@zereight/mcp-gitlab"],
+              enabled: true,
+            },
+          },
+        }),
+      )
+      // Project config explicitly disables it
+      await Filesystem.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          mcp: {
+            gitlab: {
+              enabled: false,
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect((config.mcp?.gitlab as any)?.enabled).toBe(false)
+      // Other properties from global config should still be present
+      expect((config.mcp?.gitlab as any)?.type).toBe("local")
+      expect((config.mcp?.gitlab as any)?.command).toEqual(["npx", "-y", "@zereight/mcp-gitlab"])
+    },
+  })
+})
+
 test("local .opencode config can override MCP from project config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

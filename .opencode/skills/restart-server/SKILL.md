@@ -1,73 +1,63 @@
 ---
 name: restart-server
-description: How to restart the OpenCode server managed by launchd
+description: How to restart the OpenCode server managed by systemd
 ---
 
 # Restarting the OpenCode Server
 
-This server runs as a launchd service (`com.opencode.server`). launchd keeps it alive automatically via `KeepAlive=true`.
+This server runs as a systemd user service (`opencode.service`). The binary lives at `~/.local/bin/opencode`.
 
-## How to Restart
+## How to Restart (Rebuild + Restart)
 
-The ONLY correct way to restart the server:
+The ONLY correct way to rebuild and restart:
 
 ```bash
-launchctl kickstart -k "gui/$(id -u)/com.opencode.server"
+nohup cmd/build.sh &
 ```
 
-This tells launchd to kill the current process and immediately start a new one. The start script (`cmd/start.sh`) will rebuild and serve.
+**Why `nohup`?** The build script stops the running `opencode.service` mid-way through. Since the AI agent runs inside that service, the process will be killed. `nohup` ensures the script survives and completes the restart.
 
-## What Happens on Restart
+## What `cmd/build.sh` Does
 
-1. launchd sends SIGTERM to the bun serve process
-2. launchd starts `cmd/start.sh` fresh
-3. `start.sh` runs `bun install`, builds backend and frontend, then `exec bun serve`
-4. Server is back up in ~15 seconds
+1. Exports `PATH="$HOME/.bun/bin:$PATH"`
+2. Runs `bun install`
+3. Builds the frontend (`packages/app`)
+4. Builds the backend into a single binary
+5. Runs `systemctl --user stop opencode.service`
+6. Copies binary to `~/.local/bin/opencode`
+7. Runs `systemctl --user start opencode.service`
+8. Performs a health check (waits for server to respond)
+
+Total time: ~30 seconds.
 
 ## The /restart API Endpoint
 
-`POST /experimental/restart` calls `process.exit(0)` with a 100ms delay. Since launchd has `KeepAlive=true`, it automatically restarts the process. The web UI restart button uses this endpoint. Auth: HTTP Basic (`OPENCODE_SERVER_USERNAME`/`OPENCODE_SERVER_PASSWORD`).
+`POST /experimental/restart` calls `process.exit(0)`. Since systemd has `Restart=always`, it automatically restarts the process. The web UI restart button uses this endpoint. Auth: HTTP Basic (`OPENCODE_SERVER_USERNAME`/`OPENCODE_SERVER_PASSWORD`).
 
-## Related Services
+**Note:** This only restarts the current binary — it does NOT rebuild from source. Use `cmd/build.sh` when source code has changed.
 
-| Service | Label | What it does |
-|---------|-------|-------------|
-| Server | `com.opencode.server` | bun serve on port 4096 |
-| Tunnel | `com.opencode.tunnel` | cloudflared tunnel `copilot-remote` |
-| Autoupdate | `com.opencode.autoupdate` | daily git rebase + restart at 01:00 |
-
-Plist files: `~/Library/LaunchAgents/com.opencode.*.plist`
-
-## launchd Commands Reference
+## systemd Commands Reference
 
 ```bash
-# Restart (kill + relaunch)
-launchctl kickstart -k "gui/$(id -u)/com.opencode.server"
-
-# Stop service (no auto-restart)
-launchctl bootout "gui/$(id -u)/com.opencode.server"
-
-# Load service (after bootout or first install)
-launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.opencode.server.plist
-
 # Status
-launchctl print "gui/$(id -u)/com.opencode.server"
-```
+systemctl --user status opencode.service
 
-**NOTE**: `launchctl load/unload` are deprecated and will fail with "Input/output error" if the service is already loaded. Always use `bootstrap`/`bootout` instead.
+# Stop
+systemctl --user stop opencode.service
+
+# Start
+systemctl --user start opencode.service
+
+# Restart (without rebuild)
+systemctl --user restart opencode.service
+
+# View logs
+journalctl --user -u opencode.service -f
+```
 
 ## Important Rules
 
 - NEVER kill processes manually (pkill, kill)
-- NEVER run `cmd/start.sh` directly — let launchd manage it
-- NEVER use `launchctl load/unload` — use `bootstrap/bootout`
-
-## Checking Logs
-
-```bash
-# Server logs
-tail -f /Users/1com/workspace/opencode/tmp/server.log
-
-# Tunnel logs
-tail -f /Users/1com/workspace/opencode/tmp/tunnel.log
-```
+- NEVER run the binary directly — let systemd manage it
+- When source code changes need to be applied, use `nohup cmd/build.sh &`
+- For a simple restart without rebuild, use `systemctl --user restart opencode.service`

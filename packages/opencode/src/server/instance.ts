@@ -36,10 +36,10 @@ const embeddedUIPromise = Flag.OPENCODE_DISABLE_EMBEDDED_WEB_UI
     import("opencode-web-ui.gen.ts").then((module) => module.default as Record<string, string>).catch(() => null)
 
 const DEFAULT_CSP =
-  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:"
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data: https:"
 
 const csp = (hash = "") =>
-  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:`
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data: https:`
 
 export const InstanceRoutes = (app?: Hono) =>
   (app ?? new Hono())
@@ -264,18 +264,36 @@ export const InstanceRoutes = (app?: Hono) =>
       const path = c.req.path
 
       if (embeddedWebUI) {
-        const match = embeddedWebUI[path.replace(/^\//, "")] ?? embeddedWebUI["index.html"] ?? null
-        if (!match) return c.json({ error: "Not Found" }, 404)
-        const file = Bun.file(match)
-        if (await file.exists()) {
-          c.header("Content-Type", file.type)
-          if (file.type.startsWith("text/html")) {
-            c.header("Content-Security-Policy", DEFAULT_CSP)
-          }
-          return c.body(await file.arrayBuffer())
+        const key = path.replace(/^\//, "")
+        const orig = embeddedWebUI[key] ? key : "index.html"
+        if (!embeddedWebUI[orig]) return c.json({ error: "Not Found" }, 404)
+
+        // Negotiate pre-compressed variant
+        const accept = c.req.header("accept-encoding") ?? ""
+        const encoding =
+          accept.includes("zstd") && embeddedWebUI[orig + ".zst"]
+            ? "zstd"
+            : accept.includes("br") && embeddedWebUI[orig + ".br"]
+              ? "br"
+              : accept.includes("gzip") && embeddedWebUI[orig + ".gz"]
+                ? "gzip"
+                : ""
+        const ext = encoding === "zstd" ? ".zst" : encoding === "br" ? ".br" : ".gz"
+        const resolved = encoding ? orig + ext : orig
+
+        const file = Bun.file(embeddedWebUI[resolved])
+        if (!(await file.exists())) return c.json({ error: "Not Found" }, 404)
+
+        const mime = Bun.file(embeddedWebUI[orig]).type
+        c.header("Content-Type", mime)
+        if (encoding) c.header("Content-Encoding", encoding)
+        if (mime.startsWith("text/html")) {
+          c.header("Content-Security-Policy", DEFAULT_CSP)
+          c.header("Cache-Control", "no-cache")
         } else {
-          return c.json({ error: "Not Found" }, 404)
+          c.header("Cache-Control", "public, max-age=31536000, immutable")
         }
+        return c.body(await file.arrayBuffer())
       } else {
         const response = await proxy(`https://app.opencode.ai${path}`, {
           ...c.req,
