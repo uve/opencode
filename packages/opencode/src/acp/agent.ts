@@ -1188,6 +1188,10 @@ export namespace ACP {
       if (currentVariant && !availableVariants.includes(currentVariant)) {
         this.sessionManager.setVariant(sessionId, undefined)
       }
+      // Hardcode: default to the best (most advanced) variant when none is set
+      if (!this.sessionManager.getVariant(sessionId) && availableVariants.length > 0) {
+        this.sessionManager.setVariant(sessionId, availableVariants[availableVariants.length - 1])
+      }
       const availableModels = buildAvailableModels(entries, { includeVariants: true })
       const modeState = await this.resolveModeState(directory, sessionId)
       const currentModeId = modeState.currentModeId

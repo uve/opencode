@@ -28,10 +28,18 @@ export function getConfiguredAgentVariant(input: { agent: Agent | undefined; mod
   return input.agent.variant
 }
 
+// Preferred variants in order of priority (most powerful first)
+const PREFERRED = ["xhigh", "high", "thinking"]
+
 export function resolveModelVariant(input: VariantInput) {
   if (input.selected === null) return undefined
   if (input.selected && input.variants.includes(input.selected)) return input.selected
   if (input.configured && input.variants.includes(input.configured)) return input.configured
+  // Prefer the most powerful variant by default
+  for (const pref of PREFERRED) {
+    if (input.variants.includes(pref)) return pref
+  }
+  if (input.variants.length > 0) return input.variants[input.variants.length - 1]
   return undefined
 }
 

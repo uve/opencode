@@ -30,6 +30,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { checksum } from "@opencode-ai/util/encode"
 import { useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
+import { SessionTabsStrip } from "@/components/session-tabs-strip"
 import { useComments } from "@/context/comments"
 import { getSessionPrefetch, SESSION_PREFETCH_TTL } from "@/context/global-sync/session-prefetch"
 import { useGlobalSync } from "@/context/global-sync"
@@ -359,6 +360,12 @@ export default function Page() {
 
   const workspaceKey = createMemo(() => params.dir ?? "")
   const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
+
+  // Sync collapsed state per session
+  createEffect(() => {
+    const key = sessionKey()
+    if (key) layout.prompt.setSession(key)
+  })
 
   createEffect(
     on(
@@ -859,7 +866,6 @@ export default function Page() {
         todoTimer = undefined
         if (!id) return
         if (status === "idle" && !blocked) return
-        const cached = untrack(() => sync.data.todo[id] !== undefined || globalSync.data.session_todo[id] !== undefined)
 
         todoFrame = requestAnimationFrame(() => {
           todoFrame = undefined
@@ -867,7 +873,7 @@ export default function Page() {
             todoTimer = undefined
             if (sdk.directory !== dir || params.id !== id) return
             untrack(() => {
-              void sync.session.todo(id, cached ? { force: true } : undefined)
+              void sync.session.todo(id)
             })
           }, 0)
         })
@@ -1242,7 +1248,7 @@ export default function Page() {
   )
 
   const reviewPanel = () => (
-    <div class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
+    <div class="flex flex-col h-full overflow-hidden bg-background-stronger">
       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
         {reviewContent({
           diffStyle: layout.review.diffStyle(),
@@ -1886,8 +1892,9 @@ export default function Page() {
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
       <SessionHeader />
+      <SessionTabsStrip />
       <div class="flex-1 min-h-0 flex flex-col md:flex-row">
-        <Show when={!isDesktop() && !!params.id}>
+        <Show when={false && !isDesktop() && !!params.id}>
           <Tabs value={store.mobileTab} class="h-auto">
             <Tabs.List>
               <Tabs.Trigger
@@ -1916,14 +1923,14 @@ export default function Page() {
         <div
           classList={{
             "@container relative shrink-0 flex flex-col min-h-0 h-full bg-background-stronger flex-1 md:flex-none": true,
-            "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+            "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none":
               !size.active() && !ui.reviewSnap,
           }}
           style={{
             width: sessionPanelWidth(),
           }}
         >
-          <div class="flex-1 min-h-0 overflow-hidden">
+          <div class="flex-1 min-h-px overflow-hidden">
             <Switch>
               <Match when={params.id}>
                 <Show when={messagesReady()}>

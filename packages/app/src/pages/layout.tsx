@@ -87,6 +87,7 @@ import {
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
+import { SessionsSidebar } from "./layout/sessions-sidebar"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore, , ready] = persisted(
@@ -1019,6 +1020,13 @@ export default function Layout(props: ParentProps) {
         onSelect: () => layout.sidebar.toggle(),
       },
       {
+        id: "sessionsSidebar.toggle",
+        title: "Toggle sessions sidebar",
+        category: language.t("command.category.view"),
+        keybind: "mod+shift+b",
+        onSelect: () => layout.sessionsSidebar.toggle(),
+      },
+      {
         id: "project.open",
         title: language.t("command.project.open"),
         category: language.t("command.category.project"),
@@ -1810,6 +1818,7 @@ export default function Layout(props: ParentProps) {
 
   const side = createMemo(() => Math.max(layout.sidebar.width(), 244))
   const panel = createMemo(() => Math.max(side() - 64, 0))
+  const rightSide = createMemo(() => (layout.sessionsSidebar.opened() ? layout.sessionsSidebar.width() : 0))
 
   const loadedSessionDirs = new Set<string>()
 
@@ -2381,7 +2390,7 @@ export default function Layout(props: ParentProps) {
                 arm()
               }}
             >
-              <div class="@container w-full h-full contain-strict">{sidebarContent()}</div>
+              <div class="@container w-full h-full">{sidebarContent()}</div>
             </nav>
 
             <Show when={layout.sidebar.opened()}>
@@ -2438,18 +2447,20 @@ export default function Layout(props: ParentProps) {
             <div
               classList={{
                 "absolute inset-0": true,
-                "xl:inset-y-0 xl:right-0 xl:left-[var(--main-left)]": true,
+                "xl:inset-y-0 xl:right-[var(--main-right)] xl:left-[var(--main-left)]": true,
                 "z-20": true,
-                "transition-[left] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[left] motion-reduce:transition-none":
+                "transition-[left,right] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none":
                   !state.sizing,
               }}
               style={{
                 "--main-left": layout.sidebar.opened() ? `${side()}px` : "4rem",
+                "--main-right": `${rightSide()}px`,
               }}
             >
               <main
                 classList={{
-                  "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
+                  "size-full overflow-hidden flex flex-col border-t border-border-weak-base bg-background-base xl:border-l xl:rounded-tl-[12px]": true,
+                  "xl:border-r xl:rounded-tr-[12px]": layout.sessionsSidebar.opened(),
                 }}
               >
                 <Show when={!autoselecting.loading} fallback={<div class="size-full" />}>
@@ -2494,6 +2505,56 @@ export default function Layout(props: ParentProps) {
               style={{ left: `calc(4rem + ${panel()}px)` }}
             >
               <div class="h-full w-px" style={{ "box-shadow": "var(--shadow-sidebar-overlay)" }} />
+            </div>
+
+            <Show when={layout.sessionsSidebar.opened()}>
+              <div
+                class="hidden xl:block absolute inset-y-0 right-0 z-30 overflow-visible"
+                style={{ width: `${rightSide()}px` }}
+              >
+                <div
+                  class="absolute inset-y-0 left-0 z-30 w-0 overflow-visible"
+                  onPointerDown={() => setState("sizing", true)}
+                >
+                  <ResizeHandle
+                    direction="horizontal"
+                    edge="start"
+                    size={layout.sessionsSidebar.width()}
+                    min={200}
+                    max={typeof window === "undefined" ? 500 : window.innerWidth * 0.25}
+                    onResize={(w) => {
+                      setState("sizing", true)
+                      if (sizet !== undefined) clearTimeout(sizet)
+                      sizet = window.setTimeout(() => setState("sizing", false), 120)
+                      layout.sessionsSidebar.resize(w)
+                    }}
+                  />
+                </div>
+                <SessionsSidebar archiveSession={archiveSession} />
+              </div>
+            </Show>
+
+            <div class="xl:hidden">
+              <div
+                classList={{
+                  "fixed inset-x-0 top-10 bottom-0 z-40 transition-opacity duration-200": true,
+                  "opacity-100 pointer-events-auto": layout.sessionsSidebar.opened(),
+                  "opacity-0 pointer-events-none": !layout.sessionsSidebar.opened(),
+                }}
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) layout.sessionsSidebar.close()
+                }}
+              />
+              <div
+                classList={{
+                  "fixed top-10 bottom-0 right-0 z-50 w-full max-w-[400px] overflow-hidden border-l border-border-weaker-base bg-background-base transition-transform duration-200 ease-out": true,
+                  "translate-x-0": layout.sessionsSidebar.opened(),
+                  "translate-x-full": !layout.sessionsSidebar.opened(),
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <SessionsSidebar archiveSession={archiveSession} />
+              </div>
             </div>
           </div>
         </div>

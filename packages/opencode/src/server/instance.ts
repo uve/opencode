@@ -39,10 +39,10 @@ const embeddedUIPromise = Flag.OPENCODE_DISABLE_EMBEDDED_WEB_UI
     import("opencode-web-ui.gen.ts").then((module) => module.default as Record<string, string>).catch(() => null)
 
 const DEFAULT_CSP =
-  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:"
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data: https:"
 
 const csp = (hash = "") =>
-  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:`
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data: https:`
 
 export const InstanceRoutes = (upgrade: UpgradeWebSocket, app: Hono = new Hono()) =>
   app
@@ -281,6 +281,16 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket, app: Hono = new Hono()
       },
     )
     .all("/*", async (c) => {
+      const appDir = process.env.OPENCODE_APP_DIR
+      if (appDir) {
+        const noop = async () => {}
+        const serve = serveStatic({ root: appDir, rewriteRequestPath: (p) => p })
+        const res = await serve(c, noop)
+        if (res) return res
+        const fallback = serveStatic({ root: appDir, path: "/index.html" })
+        return (await fallback(c, noop)) ?? c.notFound()
+      }
+
       const embeddedWebUI = await embeddedUIPromise
       const path = c.req.path
 
@@ -292,12 +302,22 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket, app: Hono = new Hono()
           const mime = getMimeType(match) ?? "text/plain"
           c.header("Content-Type", mime)
           if (mime.startsWith("text/html")) {
-            c.header("Content-Security-Policy", DEFAULT_CSP)
+            const content = await fs.readFile(match)
+            const scriptMatch = Buffer.from(content)
+              .toString()
+              .match(
+                /<script\b(?![^>]*\bsrc\s*=)[^>]*\bid=(['"])oc-theme-preload-script\1[^>]*>([\s\S]*?)<\/script>/i,
+              )
+            const hash = scriptMatch ? createHash("sha256").update(scriptMatch[2]).digest("base64") : ""
+            c.header("Content-Security-Policy", csp(hash))
+            c.header("Cache-Control", "no-cache")
+            return c.body(new Uint8Array(content))
+          } else {
+            c.header("Cache-Control", "public, max-age=31536000, immutable")
           }
           return c.body(new Uint8Array(await fs.readFile(match)))
-        } else {
-          return c.json({ error: "Not Found" }, 404)
         }
+        return c.json({ error: "Not Found" }, 404)
       } else {
         const response = await proxy(`https://app.opencode.ai${path}`, {
           ...c.req,

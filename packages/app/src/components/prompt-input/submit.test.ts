@@ -20,12 +20,13 @@ const storedSessions: Record<string, Array<{ id: string; title?: string }>> = {}
 const promoted: Array<{ directory: string; sessionID: string }> = []
 const sentShell: string[] = []
 const syncedDirectories: string[] = []
+const aborted: string[] = []
 
 let params: { id?: string } = {}
 let selected = "/repo/worktree-a"
 let variant: string | undefined
 
-const promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
+let promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
 
 const clientFor = (directory: string) => {
   createdClients.push(directory)
@@ -47,7 +48,10 @@ const clientFor = (directory: string) => {
       prompt: async () => ({ data: undefined }),
       promptAsync: async () => ({ data: undefined }),
       command: async () => ({ data: undefined }),
-      abort: async () => ({ data: undefined }),
+      abort: async (input: { sessionID: string }) => {
+        aborted.push(input.sessionID)
+        return { data: undefined }
+      },
     },
     worktree: {
       create: async () => ({ data: { directory: `${directory}/new` } }),
@@ -164,12 +168,16 @@ beforeAll(async () => {
 
   mock.module("@/context/global-sync", () => ({
     useGlobalSync: () => ({
+      todo: {
+        set: () => undefined,
+      },
       child: (directory: string) => {
         syncedDirectories.push(directory)
         storedSessions[directory] ??= []
         return [
           { session: storedSessions[directory] },
           (...args: unknown[]) => {
+            if (args[0] === "todo") return
             if (args[0] !== "session") return
             const next = args[1]
             if (typeof next === "function") {
@@ -211,8 +219,10 @@ beforeEach(() => {
   params = {}
   sentShell.length = 0
   syncedDirectories.length = 0
+  aborted.length = 0
   selected = "/repo/worktree-a"
   variant = undefined
+  promptValue = [{ type: "text", content: "ls", start: 0, end: 2 }]
   for (const key of Object.keys(storedSessions)) delete storedSessions[key]
 })
 

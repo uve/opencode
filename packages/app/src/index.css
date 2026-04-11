@@ -1,5 +1,29 @@
 @import "@opencode-ai/ui/styles/tailwind";
 
+@keyframes recording-border {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0px black;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px black;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes listening-border {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0px #2563eb;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px #2563eb;
+    transform: scale(1.04);
+  }
+}
+
 @layer components {
   @keyframes session-progress-whip {
     0% {

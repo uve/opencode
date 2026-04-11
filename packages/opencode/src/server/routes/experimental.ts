@@ -188,12 +188,12 @@ export const ExperimentalRoutes = lazy(() =>
           agent: await Agent.get(await Agent.defaultAgent()),
         })
         return c.json(
-          tools.map((t) => ({
-            id: t.id,
-            description: t.description,
-            // Handle both Zod schemas and plain JSON schemas
-            parameters: (t.parameters as any)?._def ? zodToJsonSchema(t.parameters as any) : t.parameters,
-          })),
+          tools.map((t) => {
+            const raw = (t.parameters as any)?._def ? zodToJsonSchema(t.parameters as any) : t.parameters
+            // Strip $schema and additionalProperties — OpenAI rejects them
+            const { $schema, additionalProperties, ...params } = raw as Record<string, any>
+            return { id: t.id, description: t.description, parameters: params }
+          }),
         )
       },
     )
@@ -374,6 +374,51 @@ export const ExperimentalRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await MCP.resources())
+      },
+    )
+    .post(
+      "/transcribe",
+      describeRoute({
+        summary: "Transcribe audio",
+        description: "Proxy audio transcription to OpenAI Whisper/GPT-4o-transcribe API.",
+        operationId: "experimental.transcribe",
+        responses: {
+          200: {
+            description: "Transcription result",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ text: z.string() })),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => {
+        const apiKey = process.env.OPENAI_AUDIO_API_KEY
+        if (!apiKey) {
+          return c.json({ error: "OPENAI_AUDIO_API_KEY not set" }, 400)
+        }
+        const body = await c.req.formData()
+        const file = body.get("file")
+        const model = body.get("model") || "gpt-4o-transcribe"
+        if (!file || !(file instanceof File)) {
+          return c.json({ error: "file is required" }, 400)
+        }
+        const form = new FormData()
+        form.append("file", file, file.name)
+        form.append("model", String(model))
+        const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: form,
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          return c.json({ error: text }, res.status as any)
+        }
+        const data = (await res.json()) as { text: string }
+        return c.json({ text: data.text })
       },
     ),
 )

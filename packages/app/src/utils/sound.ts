@@ -86,9 +86,50 @@ export function soundSrc(id: string | undefined) {
   return next
 }
 
+// iOS Safari requires audio playback to be initiated from a user gesture.
+// We unlock a shared Audio element on the first interaction so that later
+// programmatic play() calls (e.g. from SSE events) are allowed.
+let shared: HTMLAudioElement | undefined
+let unlocked = false
+
+function unlock() {
+  if (unlocked) return
+  if (typeof Audio === "undefined") return
+  shared = new Audio()
+  // Play a silent buffer to unlock the audio element.
+  shared
+    .play()
+    .then(() => {
+      shared!.pause()
+      unlocked = true
+    })
+    .catch(() => undefined)
+}
+
+if (typeof document !== "undefined") {
+  const events = ["click", "touchend", "keydown"] as const
+  const handler = () => {
+    unlock()
+    if (unlocked) events.forEach((e) => document.removeEventListener(e, handler, true))
+  }
+  events.forEach((e) => document.addEventListener(e, handler, true))
+}
+
 export function playSound(src: string | undefined) {
   if (typeof Audio === "undefined") return
   if (!src) return
+
+  // On iOS reuse the unlocked element so playback is not blocked.
+  if (unlocked && shared) {
+    shared.src = src
+    shared.currentTime = 0
+    shared.play().catch(() => undefined)
+    return () => {
+      shared!.pause()
+      shared!.currentTime = 0
+    }
+  }
+
   const audio = new Audio(src)
   audio.play().catch(() => undefined)
   return () => {

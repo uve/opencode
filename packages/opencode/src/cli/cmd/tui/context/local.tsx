@@ -329,9 +329,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           },
           current() {
             const v = this.selected()
-            if (!v) return undefined
-            if (!this.list().includes(v)) return undefined
-            return v
+            if (v) {
+              if (!this.list().includes(v)) return undefined
+              return v
+            }
+            // Hardcode: default to the best (most advanced) variant
+            const m = currentModel()
+            if (!m) return undefined
+            const provider = sync.data.provider.find((x) => x.id === m.providerID)
+            const info = provider?.models[m.modelID]
+            if (!info) return undefined
+            return Provider.bestVariant(info)
           },
           list() {
             const m = currentModel()

@@ -282,6 +282,11 @@ export const dict = {
   "prompt.attachment.remove": "Remove attachment",
   "prompt.action.send": "Send",
   "prompt.action.stop": "Stop",
+  "prompt.action.record": "Record",
+  "prompt.action.recording": "Recording...",
+  "prompt.action.transcribing": "Transcribing...",
+  "prompt.action.collapse": "Collapse input",
+  "prompt.action.expand": "Expand input",
 
   "prompt.toast.pasteUnsupported.title": "Unsupported attachment",
   "prompt.toast.pasteUnsupported.description": "Only images, PDFs, or text files can be attached here.",
@@ -722,6 +727,7 @@ export const dict = {
   "settings.general.section.notifications": "System notifications",
   "settings.general.section.updates": "Updates",
   "settings.general.section.sounds": "Sound effects",
+  "settings.general.section.voice": "Voice Input",
   "settings.general.section.feed": "Feed",
   "settings.general.section.display": "Display",
 
@@ -757,6 +763,13 @@ export const dict = {
 
   "settings.general.row.releaseNotes.title": "Release notes",
   "settings.general.row.releaseNotes.description": "Show What's New popups after updates",
+
+  "settings.voice.row.enabled.title": "Enable voice input",
+  "settings.voice.row.enabled.description": "Show microphone button in the prompt area",
+  "settings.voice.row.apiKey.title": "OpenAI API Key",
+  "settings.voice.row.apiKey.description": "API key for speech-to-text transcription",
+  "settings.voice.row.model.title": "Transcription model",
+  "settings.voice.row.model.description": "OpenAI model for audio transcription",
 
   "settings.updates.row.startup.title": "Check for updates on startup",
   "settings.updates.row.startup.description": "Automatically check for updates when OpenCode launches",

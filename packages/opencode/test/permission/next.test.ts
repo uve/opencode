@@ -316,6 +316,35 @@ test("evaluate - glob permission pattern", () => {
   expect(result.action).toBe("allow")
 })
 
+test("disabled - MCP tools are not disabled without explicit deny", () => {
+  const tools = ["bash", "read", "gitlab_list_issues", "gitlab_search_projects", "slack_send_message"]
+  const ruleset: Permission.Ruleset = [{ permission: "bash", pattern: "*", action: "allow" }]
+  const result = Permission.disabled(tools, ruleset)
+  // MCP tools should NOT be in the disabled set
+  expect(result.has("gitlab_list_issues")).toBe(false)
+  expect(result.has("gitlab_search_projects")).toBe(false)
+  expect(result.has("slack_send_message")).toBe(false)
+})
+
+test("disabled - wildcard deny blocks all including MCP tools", () => {
+  const tools = ["bash", "gitlab_list_issues"]
+  const ruleset: Permission.Ruleset = [{ permission: "*", pattern: "*", action: "deny" }]
+  const result = Permission.disabled(tools, ruleset)
+  expect(result.has("bash")).toBe(true)
+  expect(result.has("gitlab_list_issues")).toBe(true)
+})
+
+test("disabled - mcp_* allow does not prevent specific deny", () => {
+  const tools = ["gitlab_safe_tool", "gitlab_dangerous_tool"]
+  const ruleset: Permission.Ruleset = [
+    { permission: "mcp_*", pattern: "*", action: "allow" },
+    { permission: "gitlab_dangerous_tool", pattern: "*", action: "deny" },
+  ]
+  const result = Permission.disabled(tools, ruleset)
+  expect(result.has("gitlab_safe_tool")).toBe(false)
+  expect(result.has("gitlab_dangerous_tool")).toBe(true)
+})
+
 test("evaluate - specific permission and wildcard permission combined", () => {
   const result = Permission.evaluate("bash", "rm", [
     { permission: "*", pattern: "*", action: "deny" },

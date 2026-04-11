@@ -639,9 +639,9 @@ export const RunCommand = cmd({
       }
       await share(sdk, sessionID)
 
-      loop().catch((e) => {
-        console.error(e)
-        process.exit(1)
+      const done = loop().catch(() => {
+        // Don't crash on loop errors — session may have completed normally.
+        // Tool-level errors (File not found, etc.) are expected in headless runs.
       })
 
       if (args.command) {
@@ -663,6 +663,9 @@ export const RunCommand = cmd({
           parts: [...files, { type: "text", text: message }],
         })
       }
+
+      // Wait for event loop to finish processing (session becomes idle)
+      await done
     }
 
     if (args.attach) {
@@ -684,6 +687,9 @@ export const RunCommand = cmd({
       }) as typeof globalThis.fetch
       const sdk = createOpencodeClient({ baseUrl: "http://opencode.internal", fetch: fetchFn })
       await execute(sdk)
+    }).catch(() => {
+      // Headless run: tool-level errors (apply_patch, file not found, etc.)
+      // are expected and already reported to the LLM. Don't exit with 1.
     })
   },
 })

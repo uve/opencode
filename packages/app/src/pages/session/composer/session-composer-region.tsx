@@ -1,9 +1,11 @@
 import { Show, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useNavigate } from "@solidjs/router"
+import { Portal } from "solid-js/web"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { PromptInput } from "@/components/prompt-input"
 import { useLanguage } from "@/context/language"
+import { useLayout } from "@/context/layout"
 import { usePrompt } from "@/context/prompt"
 import { useSync } from "@/context/sync"
 import { getSessionHandoff, setSessionHandoff } from "@/pages/session/handoff"
@@ -16,6 +18,9 @@ import type { SessionComposerState } from "@/pages/session/composer/session-comp
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
 import type { FollowupDraft } from "@/components/prompt-input/submit"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
+import { VoiceRecorderButton } from "@/components/prompt-input/voice-recorder"
+import { VoiceModeButton } from "@/components/prompt-input/voice-mode"
+import { ScrollButtons } from "@/components/prompt-input/scroll-buttons"
 
 export function SessionComposerRegion(props: {
   state: SessionComposerState
@@ -47,6 +52,7 @@ export function SessionComposerRegion(props: {
 }) {
   const navigate = useNavigate()
   const prompt = usePrompt()
+  const layout = useLayout()
   const language = useLanguage()
   const route = useSessionKey()
   const sync = useSync()
@@ -139,7 +145,10 @@ export function SessionComposerRegion(props: {
     <div
       ref={props.setPromptDockRef}
       data-component="session-prompt-dock"
-      class="shrink-0 w-full pb-3 flex flex-col justify-center items-center bg-background-stronger pointer-events-none"
+      classList={{
+        "shrink-0 w-full flex flex-col justify-center items-center pointer-events-none": true,
+        "pb-3 bg-background-stronger": !layout.prompt.collapsed(),
+      }}
     >
       <div
         classList={{
@@ -284,6 +293,17 @@ export function SessionComposerRegion(props: {
           </Show>
         </Show>
       </div>
+
+      {/* All right-side buttons in one column — scroll + voice */}
+      <Portal>
+        <div class="fixed right-3 top-1/2 -translate-y-1/2 z-50 pointer-events-auto flex flex-col items-end gap-3">
+          <div class="flex flex-col items-end gap-3 mb-4">
+            <ScrollButtons />
+          </div>
+          <VoiceModeButton />
+          <VoiceRecorderButton />
+        </div>
+      </Portal>
     </div>
   )
 }

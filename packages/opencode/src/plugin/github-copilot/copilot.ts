@@ -5,6 +5,7 @@ import { iife } from "@/util/iife"
 import { Log } from "../../util/log"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CopilotModels } from "./models"
+import { randomUUID } from "node:crypto"
 
 const log = Log.create({ service: "plugin.copilot" })
 
@@ -12,6 +13,16 @@ const CLIENT_ID = "Ov23li8tweQw6odWQebz"
 // Add a small safety buffer when polling to avoid hitting the server
 // slightly too early due to clock skew / timer drift.
 const OAUTH_POLLING_SAFETY_MARGIN_MS = 3000 // 3 seconds
+
+// Copilot CLI impersonation — match headers/UA exactly
+const COPILOT_CLI_VERSION = "1.0.16"
+const COPILOT_API_VERSION = "2026-01-09"
+const COPILOT_INTEGRATION_ID = "copilot-developer-cli"
+// Persistent per-process IDs (Copilot CLI generates these per session/machine)
+const clientSessionId = randomUUID()
+const clientMachineId = randomUUID()
+// Cache for discovered enterprise API endpoint (null = not yet attempted)
+let discoveredApiEndpoint: string | undefined | null = null
 function normalizeDomain(url: string) {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "")
 }
@@ -66,7 +77,33 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
         const info = await getAuth()
         if (!info || info.type !== "oauth") return {}
 
-        const baseURL = base(info.enterpriseUrl)
+        let baseURL = base(info.enterpriseUrl)
+
+        // Discover enterprise API endpoint via /copilot_internal/user (like Copilot CLI does)
+        // This returns the correct API base URL for enterprise users
+        if (!info.enterpriseUrl && discoveredApiEndpoint === null) {
+          try {
+            const ua = `copilot/${COPILOT_CLI_VERSION} (client/github/cli ${process.platform} ${process.version}) term/unknown`
+            const resp = await fetch("https://api.github.com/copilot_internal/user", {
+              headers: {
+                Authorization: `Bearer ${info.refresh}`,
+                Accept: "application/json",
+                "User-Agent": ua,
+              },
+            })
+            if (resp.ok) {
+              const data = (await resp.json()) as { endpoints?: { api?: string } }
+              discoveredApiEndpoint = data?.endpoints?.api ?? undefined
+            } else {
+              discoveredApiEndpoint = undefined
+            }
+          } catch {
+            discoveredApiEndpoint = undefined
+          }
+        }
+        if (!info.enterpriseUrl && discoveredApiEndpoint) {
+          baseURL = discoveredApiEndpoint
+        }
 
         return {
           baseURL,
@@ -130,11 +167,19 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
             })
 
             const headers: Record<string, string> = {
-              "x-initiator": isAgent ? "agent" : "user",
+              "X-Initiator": isAgent ? "agent" : "user",
               ...(init?.headers as Record<string, string>),
-              "User-Agent": `opencode/${Installation.VERSION}`,
+              // Copilot CLI-identical headers
+              "Openai-Intent": "conversation-agent",
+              "X-GitHub-Api-Version": COPILOT_API_VERSION,
+              "Copilot-Integration-Id": COPILOT_INTEGRATION_ID,
+              "X-Interaction-Id": randomUUID(),
+              "User-Agent": `copilot/${COPILOT_CLI_VERSION} (client/github/cli ${process.platform} ${process.version}) term/unknown`,
               Authorization: `Bearer ${info.refresh}`,
-              "Openai-Intent": "conversation-edits",
+              "X-Interaction-Type": isAgent ? "conversation-agent" : "conversation-user",
+              "X-Agent-Task-Id": randomUUID(),
+              "X-Client-Session-Id": clientSessionId,
+              "X-Client-Machine-Id": clientMachineId,
             }
 
             if (isVision) {
@@ -143,6 +188,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
 
             delete headers["x-api-key"]
             delete headers["authorization"]
+            delete headers["x-initiator"]
 
             return fetch(request, {
               ...init,
@@ -338,7 +384,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
         .catch(() => undefined)
 
       if (parts?.data.parts?.some((part) => part.type === "compaction")) {
-        output.headers["x-initiator"] = "agent"
+        output.headers["X-Initiator"] = "agent"
         return
       }
 
@@ -355,7 +401,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
         .catch(() => undefined)
       if (!session || !session.data.parentID) return
       // mark subagent sessions as agent initiated matching standard that other copilot tools have
-      output.headers["x-initiator"] = "agent"
+      output.headers["X-Initiator"] = "agent"
     },
   }
 }

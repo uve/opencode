@@ -29,6 +29,7 @@ import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
+import { useLayout } from "@/context/layout"
 import { messageAgentColor } from "@/utils/agent"
 import { sessionTitle } from "@/utils/session-title"
 import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
@@ -239,6 +240,7 @@ export function MessageTimeline(props: {
   const settings = useSettings()
   const dialog = useDialog()
   const language = useLanguage()
+  const layout = useLayout()
   const { params, sessionKey } = useSessionKey()
   const platform = usePlatform()
 
@@ -1043,10 +1045,6 @@ export function MessageTimeline(props: {
                       classList={{
                         "min-w-0 w-full max-w-full": true,
                         "md:max-w-200 2xl:max-w-[1000px]": props.centered,
-                      }}
-                      style={{
-                        "content-visibility": active() ? undefined : "auto",
-                        "contain-intrinsic-size": active() ? undefined : "auto 500px",
                       }}
                     >
                       <Show when={commentCount() > 0}>
