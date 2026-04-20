@@ -124,7 +124,7 @@ export function Icon(props: IconProps) {
       <svg
         data-slot="icon-svg"
         classList={{
-          ...(local.classList || {}),
+          ...local.classList,
           [local.class ?? ""]: !!local.class,
         }}
         fill="none"

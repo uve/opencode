@@ -5,8 +5,8 @@ import { useLayout } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useNotification } from "@/context/notification"
 import { Spinner } from "@opencode-ai/ui/spinner"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { getFilename } from "@opencode-ai/util/path"
+import { base64Encode } from "@opencode-ai/shared/util/encode"
+import { getFilename } from "@opencode-ai/shared/util/path"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 const MAX_TABS = 5

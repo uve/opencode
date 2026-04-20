@@ -8,8 +8,8 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { getFilename } from "@opencode-ai/util/path"
+import { base64Encode } from "@opencode-ai/shared/util/encode"
+import { getFilename } from "@opencode-ai/shared/util/path"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 type SessionWithProject = Session & { projectName: string; slug: string }

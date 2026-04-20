@@ -1,11 +1,13 @@
 import { Show, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
+import { useNavigate } from "@solidjs/router"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { PromptInput } from "@/components/prompt-input"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePrompt } from "@/context/prompt"
+import { useSync } from "@/context/sync"
 import { getSessionHandoff, setSessionHandoff } from "@/pages/session/handoff"
 import { useSessionKey } from "@/pages/session/session-layout"
 import { SessionPermissionDock } from "@/pages/session/composer/session-permission-dock"
@@ -18,6 +20,7 @@ import type { FollowupDraft } from "@/components/prompt-input/submit"
 import { VoiceRecorderButton } from "@/components/prompt-input/voice-recorder"
 import { VoiceModeButton } from "@/components/prompt-input/voice-mode"
 import { ScrollButtons } from "@/components/prompt-input/scroll-buttons"
+import { createResizeObserver } from "@solid-primitives/resize-observer"
 
 export function SessionComposerRegion(props: {
   state: SessionComposerState
@@ -47,12 +50,18 @@ export function SessionComposerRegion(props: {
   }
   setPromptDockRef: (el: HTMLDivElement) => void
 }) {
+  const navigate = useNavigate()
   const prompt = usePrompt()
   const layout = useLayout()
   const language = useLanguage()
   const route = useSessionKey()
+  const sync = useSync()
 
   const handoffPrompt = createMemo(() => getSessionHandoff(route.sessionKey())?.prompt)
+  const info = createMemo(() => (route.params.id ? sync.session.get(route.params.id) : undefined))
+  const parentID = createMemo(() => info()?.parentID)
+  const child = createMemo(() => !!parentID())
+  const showComposer = createMemo(() => !props.state.blocked() || child())
 
   const previewPrompt = () =>
     prompt
@@ -118,16 +127,18 @@ export function SessionComposerRegion(props: {
   const lift = createMemo(() => (rolled() ? 18 : 36 * value()))
   const full = createMemo(() => Math.max(78, store.height))
 
+  const openParent = () => {
+    const id = parentID()
+    if (!id) return
+    navigate(`/${route.params.dir}/session/${id}`)
+  }
+
   createEffect(() => {
     const el = store.body
     if (!el) return
-    const update = () => {
-      setStore("height", el.getBoundingClientRect().height)
-    }
+    const update = () => setStore("height", el.getBoundingClientRect().height)
+    createResizeObserver(store.body, update)
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    onCleanup(() => observer.disconnect())
   })
 
   return (
@@ -168,7 +179,7 @@ export function SessionComposerRegion(props: {
           )}
         </Show>
 
-        <Show when={!props.state.blocked()}>
+        <Show when={showComposer()}>
           <Show
             when={prompt.ready()}
             fallback={
@@ -249,17 +260,40 @@ export function SessionComposerRegion(props: {
                   "invisible h-0 overflow-hidden": layout.prompt.collapsed(),
                 }}
               >
-                <PromptInput
-                  ref={props.inputRef}
-                  newSessionWorktree={props.newSessionWorktree}
-                  onNewSessionWorktreeReset={props.onNewSessionWorktreeReset}
-                  edit={props.followup?.edit}
-                  onEditLoaded={props.followup?.onEditLoaded}
-                  shouldQueue={props.followup?.queue}
-                  onQueue={props.followup?.onQueue}
-                  onAbort={props.followup?.onAbort}
-                  onSubmit={props.onSubmit}
-                />
+                <Show
+                  when={child()}
+                  fallback={
+                    <Show when={!props.state.blocked()}>
+                      <PromptInput
+                        ref={props.inputRef}
+                        newSessionWorktree={props.newSessionWorktree}
+                        onNewSessionWorktreeReset={props.onNewSessionWorktreeReset}
+                        edit={props.followup?.edit}
+                        onEditLoaded={props.followup?.onEditLoaded}
+                        shouldQueue={props.followup?.queue}
+                        onQueue={props.followup?.onQueue}
+                        onAbort={props.followup?.onAbort}
+                        onSubmit={props.onSubmit}
+                      />
+                    </Show>
+                  }
+                >
+                  <div
+                    ref={props.inputRef}
+                    class="w-full rounded-[12px] border border-border-weak-base bg-background-base p-3 text-16-regular text-text-weak"
+                  >
+                    <span>{language.t("session.child.promptDisabled")} </span>
+                    <Show when={parentID()}>
+                      <button
+                        type="button"
+                        class="text-text-base transition-colors hover:text-text-strong"
+                        onClick={openParent}
+                      >
+                        {language.t("session.child.backToParent")}
+                      </button>
+                    </Show>
+                  </div>
+                </Show>
               </div>
             </div>
           </Show>
