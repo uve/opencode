@@ -287,7 +287,6 @@ export function Titlebar() {
                   </Tooltip>
                 </div>
               </Show>
-              <div id="opencode-titlebar-left" class="flex items-center gap-3 min-w-0 px-2" />
               {["beta", "dev"].includes(import.meta.env.VITE_OPENCODE_CHANNEL) && (
                 <div class="bg-icon-interactive-base text-[#FFF] font-medium px-2 rounded-sm uppercase font-mono">
                   {import.meta.env.VITE_OPENCODE_CHANNEL.toUpperCase()}
@@ -296,6 +295,7 @@ export function Titlebar() {
             </div>
           </div>
         </div>
+        <div id="opencode-titlebar-left" class="flex items-center min-w-0 flex-1 overflow-x-auto no-scrollbar" />
       </div>
 
       <div class="min-w-0 flex items-center justify-center pointer-events-none">
