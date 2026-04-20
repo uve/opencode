@@ -1,6 +1,5 @@
 import { describeRoute, resolver, validator } from "hono-openapi"
 import { Hono } from "hono"
-import { serveStatic } from "hono/bun"
 import type { UpgradeWebSocket } from "hono/ws"
 import { Context, Effect } from "effect"
 import z from "zod"
@@ -295,16 +294,4 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
           return yield* svc.status()
         }),
     )
-    .all("/*", async (c) => {
-      const appDir = process.env.OPENCODE_APP_DIR
-      if (appDir) {
-        const noop = async () => {}
-        const serve = serveStatic({ root: appDir, rewriteRequestPath: (p) => p })
-        const res = await serve(c, noop)
-        if (res) return res
-        const fallback = serveStatic({ root: appDir, path: "/index.html" })
-        return (await fallback(c, noop)) ?? c.notFound()
-      }
-      return c.notFound()
-    })
 }
