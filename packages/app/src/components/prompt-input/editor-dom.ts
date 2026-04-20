@@ -28,11 +28,13 @@ export function createTextFragment(content: string): DocumentFragment {
 }
 
 export function getNodeLength(node: Node): number {
+  if (!node) return 0
   if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === "BR") return 1
   return (node.textContent ?? "").replace(/\u200B/g, "").length
 }
 
 export function getTextLength(node: Node): number {
+  if (!node) return 0
   if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? "").replace(/\u200B/g, "").length
   if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === "BR") return 1
   let length = 0
@@ -43,6 +45,7 @@ export function getTextLength(node: Node): number {
 }
 
 export function getCursorPosition(parent: HTMLElement): number {
+  if (!parent) return 0
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) return 0
   const range = selection.getRangeAt(0)
@@ -54,6 +57,7 @@ export function getCursorPosition(parent: HTMLElement): number {
 }
 
 export function setCursorPosition(parent: HTMLElement, position: number) {
+  if (!parent) return
   let remaining = position
   let node = parent.firstChild
   while (node) {
@@ -118,6 +122,7 @@ export function setCursorPosition(parent: HTMLElement, position: number) {
 }
 
 export function setRangeEdge(parent: HTMLElement, range: Range, edge: "start" | "end", offset: number) {
+  if (!parent) return
   let remaining = offset
   const nodes = Array.from(parent.childNodes)
 

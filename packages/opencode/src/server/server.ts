@@ -3,7 +3,6 @@ import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler 
 import { Hono } from "hono"
 import { compress } from "hono/compress"
 import { cors } from "hono/cors"
-import { basicAuth } from "hono/basic-auth"
 import z from "zod"
 import { Auth } from "../auth"
 import { Flag } from "../flag/flag"
@@ -17,6 +16,8 @@ import { lazy } from "@/util/lazy"
 import { errorHandler } from "./middleware"
 import { InstanceRoutes } from "./instance"
 import { initProjectors } from "./projectors"
+import { getCookie, setCookie } from "hono/cookie"
+import { createHmac, timingSafeEqual } from "node:crypto"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -36,18 +37,58 @@ export namespace Server {
 
   export const Default = lazy(() => ControlPlaneRoutes())
 
+  const SESSION_COOKIE = "oc_session"
+  const SESSION_MAX_AGE = 60 * 60 * 24 * 30 // 30 days
+
+  function sign(password: string) {
+    return createHmac("sha256", password).update("oc-session-v1").digest("hex")
+  }
+
+  function verifySignature(cookie: string, password: string) {
+    const expected = sign(password)
+    if (cookie.length !== expected.length) return false
+    return timingSafeEqual(Buffer.from(cookie), Buffer.from(expected))
+  }
+
+  function verifyBasic(header: string, username: string, password: string) {
+    const match = header.match(/^Basic\s+(.+)$/i)
+    if (!match) return false
+    const decoded = Buffer.from(match[1], "base64").toString()
+    const idx = decoded.indexOf(":")
+    if (idx < 0) return false
+    return decoded.slice(0, idx) === username && decoded.slice(idx + 1) === password
+  }
+
   export const ControlPlaneRoutes = (opts?: { cors?: string[] }): Hono => {
     const app = new Hono()
     return app
       .onError(errorHandler(log))
-      .use((c, next) => {
-        // Allow CORS preflight requests to succeed without auth.
-        // Browser clients sending Authorization headers will preflight with OPTIONS.
+      .use(async (c, next) => {
         if (c.req.method === "OPTIONS") return next()
+        if (c.req.header("upgrade")) return next()
         const password = Flag.OPENCODE_SERVER_PASSWORD
         if (!password) return next()
         const username = Flag.OPENCODE_SERVER_USERNAME ?? "opencode"
-        return basicAuth({ username, password })(c, next)
+
+        // check session cookie first
+        const cookie = getCookie(c, SESSION_COOKIE)
+        if (cookie && verifySignature(cookie, password)) return next()
+
+        // fall back to Basic Auth
+        const auth = c.req.header("Authorization")
+        if (!auth || !verifyBasic(auth, username, password)) {
+          c.header("WWW-Authenticate", 'Basic realm="opencode"')
+          return c.text("Unauthorized", 401)
+        }
+
+        // set session cookie on successful Basic Auth
+        setCookie(c, SESSION_COOKIE, sign(password), {
+          path: "/",
+          httpOnly: true,
+          sameSite: "Lax",
+          maxAge: SESSION_MAX_AGE,
+        })
+        return next()
       })
       .use(async (c, next) => {
         const skip = c.req.path === "/log"

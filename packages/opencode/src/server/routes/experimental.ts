@@ -8,7 +8,7 @@ import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { MCP } from "../../mcp"
 import { Session } from "../../session"
-import { zodToJsonSchema } from "zod-to-json-schema"
+import { toJSONSchema } from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { WorkspaceRoutes } from "./workspace"
@@ -80,12 +80,12 @@ export const ExperimentalRoutes = lazy(() =>
         const { provider, model } = c.req.valid("query")
         const tools = await ToolRegistry.tools({ providerID: ProviderID.make(provider), modelID: ModelID.make(model) })
         return c.json(
-          tools.map((t) => ({
-            id: t.id,
-            description: t.description,
-            // Handle both Zod schemas and plain JSON schemas
-            parameters: (t.parameters as any)?._def ? zodToJsonSchema(t.parameters as any) : t.parameters,
-          })),
+          tools.map((t) => {
+            const raw = (t.parameters as any)?._def ? toJSONSchema(t.parameters as any) : t.parameters
+            // Strip $schema and additionalProperties — OpenAI rejects them
+            const { $schema, additionalProperties, ...params } = raw as Record<string, any>
+            return { id: t.id, description: t.description, parameters: params }
+          }),
         )
       },
     )
@@ -266,6 +266,185 @@ export const ExperimentalRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await MCP.resources())
+      },
+    )
+    .post(
+      "/transcribe",
+      describeRoute({
+        summary: "Transcribe audio",
+        description: "Proxy audio transcription to OpenAI Whisper/GPT-4o-transcribe API.",
+        operationId: "experimental.transcribe",
+        responses: {
+          200: {
+            description: "Transcription result",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ text: z.string() })),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => {
+        const apiKey = process.env.OPENAI_AUDIO_API_KEY
+        if (!apiKey) {
+          return c.json({ error: "OPENAI_AUDIO_API_KEY not set" }, 400)
+        }
+        const body = await c.req.formData()
+        const file = body.get("file")
+        const model = body.get("model") || "gpt-4o-transcribe"
+        if (!file || !(file instanceof File)) {
+          return c.json({ error: "file is required" }, 400)
+        }
+        const form = new FormData()
+        form.append("file", file, file.name)
+        form.append("model", String(model))
+        const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: form,
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          return c.json({ error: text }, res.status as any)
+        }
+        const data = (await res.json()) as { text: string }
+        return c.json({ text: data.text })
+      },
+    )
+    .post(
+      "/tts",
+      describeRoute({
+        summary: "Text to speech",
+        description:
+          "Proxy text-to-speech to OpenAI or ElevenLabs TTS API. Set TTS_ENGINE=elevenlabs and ELEVENLABS_API_KEY to use ElevenLabs. Defaults to OpenAI.",
+        operationId: "experimental.tts",
+        responses: {
+          200: {
+            description: "Audio stream",
+            content: {
+              "audio/mpeg": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => {
+        const body = (await c.req.json()) as { text?: string; voice?: string; model?: string }
+        if (!body.text?.trim()) {
+          return c.json({ error: "text is required" }, 400)
+        }
+
+        const engine = (process.env.TTS_ENGINE || "openai").toLowerCase()
+
+        // ── ElevenLabs ──
+        if (engine === "elevenlabs") {
+          const apiKey = process.env.ELEVENLABS_API_KEY
+          if (!apiKey) {
+            return c.json({ error: "ELEVENLABS_API_KEY not set" }, 400)
+          }
+          const voice = process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL"
+          const model = body.model || "eleven_multilingual_v2"
+          const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`, {
+            method: "POST",
+            headers: {
+              "xi-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: body.text.slice(0, 5000),
+              model_id: model,
+            }),
+          })
+          if (!res.ok) {
+            const text = await res.text()
+            return c.json({ error: text }, res.status as any)
+          }
+          c.header("Content-Type", "audio/mpeg")
+          return c.body(res.body as any)
+        }
+
+        // ── OpenAI (default) ──
+        const apiKey = process.env.OPENAI_AUDIO_API_KEY
+        if (!apiKey) {
+          return c.json({ error: "OPENAI_AUDIO_API_KEY not set" }, 400)
+        }
+        const res = await fetch("https://api.openai.com/v1/audio/speech", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: body.model || "gpt-4o-mini-tts",
+            voice: body.voice || "nova",
+            input: body.text.slice(0, 4096),
+            response_format: "mp3",
+          }),
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          return c.json({ error: text }, res.status as any)
+        }
+        c.header("Content-Type", "audio/mpeg")
+        return c.body(res.body as any)
+      },
+    )
+    .post(
+      "/realtime/session",
+      describeRoute({
+        summary: "Create OpenAI Realtime ephemeral session",
+        description:
+          "Mint an ephemeral client token for the browser to open a WebRTC connection to OpenAI Realtime API.",
+        operationId: "experimental.realtime.session",
+        responses: {
+          200: {
+            description: "Ephemeral session",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => {
+        const key = process.env.OPENAI_REALTIME_API_KEY || process.env.OPENAI_AUDIO_API_KEY
+        if (!key) {
+          return c.json({ error: "OPENAI_REALTIME_API_KEY not set" }, 400)
+        }
+        const body = (await c.req.json().catch(() => ({}))) as {
+          model?: string
+          language?: string
+        }
+        const res = await fetch("https://api.openai.com/v1/realtime/transcription_sessions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            input_audio_format: "pcm16",
+            input_audio_transcription: {
+              model: body.model || "gpt-4o-transcribe",
+              language: body.language,
+            },
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.5,
+              silence_duration_ms: 600,
+            },
+          }),
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          return c.json({ error: text }, res.status as any)
+        }
+        return c.json(await res.json())
       },
     ),
 )

@@ -748,3 +748,167 @@ test(
     expect(transportCloseCount).toBeGreaterThanOrEqual(2)
   }),
 )
+
+// ========================================================================
+// Test: tools() returns tools from multiple connected servers
+// ========================================================================
+
+test(
+  "tools() returns tools from multiple connected servers",
+  withInstance({}, async () => {
+    // Add first server
+    lastCreatedClientName = "gitlab"
+    const gitlabState = getOrCreateClientState("gitlab")
+    gitlabState.tools = [
+      { name: "list_issues", description: "List GitLab issues", inputSchema: { type: "object", properties: {} } },
+      {
+        name: "search_projects",
+        description: "Search GitLab projects",
+        inputSchema: { type: "object", properties: {} },
+      },
+    ]
+
+    await MCP.add("gitlab", {
+      type: "local",
+      command: ["echo", "test"],
+    })
+
+    // Add second server
+    lastCreatedClientName = "slack"
+    const slackState = getOrCreateClientState("slack")
+    slackState.tools = [
+      { name: "send_message", description: "Send Slack message", inputSchema: { type: "object", properties: {} } },
+    ]
+
+    await MCP.add("slack", {
+      type: "local",
+      command: ["echo", "test"],
+    })
+
+    const tools = await MCP.tools()
+    const keys = Object.keys(tools)
+
+    // Should have 3 tools total (2 from gitlab + 1 from slack)
+    expect(keys.length).toBe(3)
+    expect(keys.some((k) => k === "gitlab_list_issues")).toBe(true)
+    expect(keys.some((k) => k === "gitlab_search_projects")).toBe(true)
+    expect(keys.some((k) => k === "slack_send_message")).toBe(true)
+  }),
+)
+
+// ========================================================================
+// Test: tools() excludes tools from failed servers
+// ========================================================================
+
+test(
+  "tools() excludes tools from failed servers",
+  withInstance({}, async () => {
+    // Add working server
+    lastCreatedClientName = "working"
+    const workingState = getOrCreateClientState("working")
+    workingState.tools = [
+      { name: "good_tool", description: "Works fine", inputSchema: { type: "object", properties: {} } },
+    ]
+
+    await MCP.add("working", {
+      type: "local",
+      command: ["echo", "test"],
+    })
+
+    // Add server that fails to list tools
+    lastCreatedClientName = "broken"
+    const brokenState = getOrCreateClientState("broken")
+    brokenState.listToolsShouldFail = true
+
+    await MCP.add("broken", {
+      type: "local",
+      command: ["echo", "test"],
+    })
+
+    const tools = await MCP.tools()
+    const keys = Object.keys(tools)
+
+    // Only the working server's tool should be present
+    expect(keys.length).toBe(1)
+    expect(keys[0]).toBe("working_good_tool")
+  }),
+)
+
+// ========================================================================
+// Test: tools() are callable after connect
+// ========================================================================
+
+test(
+  "MCP tool can be called after connecting",
+  withInstance({}, async () => {
+    lastCreatedClientName = "callable"
+    const state = getOrCreateClientState("callable")
+    state.tools = [
+      {
+        name: "my_action",
+        description: "Performs an action",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search query" },
+          },
+        },
+      },
+    ]
+
+    await MCP.add("callable", {
+      type: "local",
+      command: ["echo", "test"],
+    })
+
+    const tools = await MCP.tools()
+    expect(tools["callable_my_action"]).toBeDefined()
+
+    // Verify the tool has an execute function
+    const item = tools["callable_my_action"]
+    expect(item.execute).toBeDefined()
+    expect(typeof item.execute).toBe("function")
+  }),
+)
+
+// ========================================================================
+// Test: reconnect restores tools
+// ========================================================================
+
+test(
+  "reconnect restores tools after disconnect",
+  withInstance(
+    {
+      "restore-server": {
+        type: "local",
+        command: ["echo", "test"],
+      },
+    },
+    async () => {
+      lastCreatedClientName = "restore-server"
+      const state = getOrCreateClientState("restore-server")
+      state.tools = [
+        { name: "restored_tool", description: "Should reappear", inputSchema: { type: "object", properties: {} } },
+      ]
+
+      await MCP.add("restore-server", {
+        type: "local",
+        command: ["echo", "test"],
+      })
+
+      // Tools should be available
+      let tools = await MCP.tools()
+      expect(Object.keys(tools).some((k) => k.includes("restored_tool"))).toBe(true)
+
+      // Disconnect
+      await MCP.disconnect("restore-server")
+      tools = await MCP.tools()
+      expect(Object.keys(tools).length).toBe(0)
+
+      // Reconnect
+      await MCP.connect("restore-server")
+      tools = await MCP.tools()
+      expect(Object.keys(tools).some((k) => k.includes("restored_tool"))).toBe(true)
+    },
+  ),
+)

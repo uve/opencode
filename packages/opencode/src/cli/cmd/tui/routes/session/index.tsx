@@ -51,6 +51,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
+import { Header } from "./header"
 import { parsePatch } from "diff"
 import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
@@ -61,7 +62,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar } from "./sidebar"
-import { SubagentFooter } from "./subagent-footer.tsx"
+import { SessionsSidebar } from "./sidebar-sessions"
 import { Flag } from "@/flag/flag"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import parsers from "../../../../../../parsers-config.ts"
@@ -148,12 +149,15 @@ export function Session() {
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
+  const [sessionsSidebar, setSessionsSidebar] = kv.signal<"auto" | "hide">("sessions_sidebar", "hide")
+  const [sessionsSidebarOpen, setSessionsSidebarOpen] = createSignal(false)
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
   const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
+  const [showHeader, setShowHeader] = kv.signal("header_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
@@ -165,8 +169,13 @@ export function Session() {
     if (sidebar() === "auto" && wide()) return true
     return false
   })
+  const sessionsSidebarVisible = createMemo(() => {
+    if (sessionsSidebarOpen()) return true
+    if (sessionsSidebar() === "auto" && wide()) return true
+    return false
+  })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - (sessionsSidebarVisible() ? 38 : 0) - 4)
 
   const scrollAcceleration = createMemo(() => {
     const tui = tuiConfig
@@ -334,7 +343,7 @@ export function Session() {
     if (children().length === 1) return
 
     const sessions = children().filter((x) => !!x.parentID)
-    let next = sessions.findIndex((x) => x.id === session()?.id) - direction
+    let next = sessions.findIndex((x) => x.id === session()?.id) + direction
 
     if (next >= sessions.length) next = 0
     if (next < 0) next = sessions.length - 1
@@ -578,6 +587,20 @@ export function Session() {
       },
     },
     {
+      title: sessionsSidebarVisible() ? "Hide sessions sidebar" : "Show sessions sidebar",
+      value: "session.sessions_sidebar.toggle",
+      keybind: "sessions_sidebar_toggle",
+      category: "Session",
+      onSelect: (dialog) => {
+        batch(() => {
+          const isVisible = sessionsSidebarVisible()
+          setSessionsSidebar(() => (isVisible ? "hide" : "auto"))
+          setSessionsSidebarOpen(!isVisible)
+        })
+        dialog.clear()
+      },
+    },
+    {
       title: conceal() ? "Disable code concealment" : "Enable code concealment",
       value: "session.toggle.conceal",
       keybind: "messages_toggle_conceal" as any,
@@ -631,6 +654,15 @@ export function Session() {
       category: "Session",
       onSelect: (dialog) => {
         setShowScrollbar((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: showHeader() ? "Hide header" : "Show header",
+      value: "session.toggle.header",
+      category: "Session",
+      onSelect: (dialog) => {
+        setShowHeader((prev) => !prev)
         dialog.clear()
       },
     },
@@ -1035,8 +1067,31 @@ export function Session() {
       }}
     >
       <box flexDirection="row">
-        <box flexGrow={1} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
+        <Show when={sessionsSidebarVisible()}>
+          <Switch>
+            <Match when={wide()}>
+              <SessionsSidebar />
+            </Match>
+            <Match when={!wide()}>
+              <box
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+                zIndex={1}
+                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
+              >
+                <SessionsSidebar overlay />
+              </box>
+            </Match>
+          </Switch>
+        </Show>
+        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
+            <Show when={showHeader() && (!sidebarVisible() || !wide())}>
+              <Header />
+            </Show>
             <scrollbox
               ref={(r) => (scroll = r)}
               viewportOptions={{
@@ -1055,7 +1110,6 @@ export function Session() {
               flexGrow={1}
               scrollAcceleration={scrollAcceleration()}
             >
-              <box height={1} />
               <For each={messages()}>
                 {(message, index) => (
                   <Switch>
@@ -1159,9 +1213,6 @@ export function Session() {
               <Show when={permissions().length === 0 && questions().length > 0}>
                 <QuestionPrompt request={questions()[0]} />
               </Show>
-              <Show when={session()?.parentID}>
-                <SubagentFooter />
-              </Show>
               <Prompt
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
                 ref={(r) => {
@@ -1228,6 +1279,7 @@ function UserMessage(props: {
   const local = useLocal()
   const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && !x.synthetic ? [x] : []))[0])
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
+  const sync = useSync()
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
@@ -1613,6 +1665,17 @@ function GenericTool(props: ToolProps<any>) {
   )
 }
 
+function ToolTitle(props: { fallback: string; when: any; icon: string; children: JSX.Element }) {
+  const { theme } = useTheme()
+  return (
+    <text paddingLeft={3} fg={props.when ? theme.textMuted : theme.text}>
+      <Show fallback={<>~ {props.fallback}</>} when={props.when}>
+        <span style={{ bold: true }}>{props.icon}</span> {props.children}
+      </Show>
+    </text>
+  )
+}
+
 function InlineTool(props: {
   icon: string
   iconColor?: RGBA
@@ -1950,7 +2013,10 @@ function WebSearch(props: ToolProps<any>) {
 }
 
 function Task(props: ToolProps<typeof TaskTool>) {
+  const { theme } = useTheme()
+  const keybind = useKeybind()
   const { navigate } = useRoute()
+  const local = useLocal()
   const sync = useSync()
 
   onMount(() => {
@@ -1981,7 +2047,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
 
   const content = createMemo(() => {
     if (!props.input.description) return ""
-    let content = [`${Locale.titlecase(props.input.subagent_type ?? "General")} Task — ${props.input.description}`]
+    let content = [`Task ${props.input.description}`]
 
     if (isRunning() && tools().length > 0) {
       // content[0] += ` · ${tools().length} toolcalls`

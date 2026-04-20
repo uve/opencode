@@ -3,6 +3,7 @@
 import { $ } from "bun"
 import fs from "fs"
 import path from "path"
+import zlib from "node:zlib"
 import { fileURLToPath } from "url"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 
@@ -71,6 +72,21 @@ const createEmbeddedWebUIBundle = async () => {
   const appDir = path.join(import.meta.dirname, "../../app")
   const dist = path.join(appDir, "dist")
   await $`bun run --cwd ${appDir} build`
+  // Pre-compress text-based assets with zstd, brotli, and gzip
+  const raw = await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: dist }))
+  for (const file of raw) {
+    if (!/\.(js|css|html|svg|json|txt|xml|map)$/.test(file)) continue
+    const buf = Buffer.from(await Bun.file(path.join(dist, file)).arrayBuffer())
+    await Bun.write(path.join(dist, file + ".zst"), Bun.zstdCompressSync(buf, { level: 19 }))
+    await Bun.write(
+      path.join(dist, file + ".br"),
+      zlib.brotliCompressSync(buf, {
+        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY },
+      }),
+    )
+    await Bun.write(path.join(dist, file + ".gz"), zlib.gzipSync(buf, { level: 9 }))
+  }
+  console.log("Pre-compressed assets with zstd, brotli, and gzip")
   const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: dist })))
     .map((file) => file.replaceAll("\\", "/"))
     .sort()

@@ -25,11 +25,13 @@ export const SidebarContent = (props: {
   openProjectKeybind: Accessor<string | undefined>
   onOpenProject: () => void
   renderProjectOverlay: () => JSX.Element
+  renderNav?: () => JSX.Element
   settingsLabel: Accessor<string>
   settingsKeybind: Accessor<string | undefined>
   onOpenSettings: () => void
   helpLabel: Accessor<string>
   onOpenHelp: () => void
+  onRestart?: () => void
   renderPanel: () => JSX.Element
 }): JSX.Element => {
   const expanded = createMemo(() => !!props.mobile || props.opened())
@@ -53,6 +55,9 @@ export const SidebarContent = (props: {
         class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden"
         onMouseMove={props.aimMove}
       >
+        <Show when={props.renderNav}>
+          {(nav) => <div class="shrink-0 w-full pt-2 flex flex-col items-center gap-1">{nav()()}</div>}
+        </Show>
         <div class="flex-1 min-h-0 w-full">
           <DragDropProvider
             onDragStart={props.handleDragStart}
@@ -108,6 +113,18 @@ export const SidebarContent = (props: {
               aria-label={props.helpLabel()}
             />
           </Tooltip>
+          <Show when={props.onRestart}>
+            <Tooltip placement={placement()} value="Restart">
+              <IconButton
+                icon="reload"
+                variant="ghost"
+                size="large"
+                onClick={props.onRestart}
+                aria-label="Restart"
+                style={{ color: "#ef4444" }}
+              />
+            </Tooltip>
+          </Show>
         </div>
       </div>
 

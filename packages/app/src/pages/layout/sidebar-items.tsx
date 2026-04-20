@@ -100,6 +100,7 @@ const SessionRow = (props: {
   warmHover: () => void
   warmPress: () => void
   warmFocus: () => void
+  onNavigate?: () => void
   cancelHoverPrefetch: () => void
 }): JSX.Element => (
   <A
@@ -110,6 +111,7 @@ const SessionRow = (props: {
     onPointerLeave={props.cancelHoverPrefetch}
     onFocus={props.warmFocus}
     onClick={() => {
+      props.onNavigate?.()
       props.setHoverSession(undefined)
       if (props.sidebarOpened()) return
       props.clearHoverProjectSoon()
@@ -299,6 +301,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       setHoverSession={props.setHoverSession}
       clearHoverProjectSoon={props.clearHoverProjectSoon}
       sidebarOpened={layout.sidebar.opened}
+      onNavigate={() => layout.mobileSidebar.hide()}
       warmHover={scheduleHoverPrefetch}
       warmPress={() => warm(2, "high")}
       warmFocus={() => warm(2, "high")}
@@ -397,6 +400,7 @@ export const NewSessionItem = (props: {
       end
       class={`flex items-center gap-1 min-w-0 w-full text-left focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
       onClick={() => {
+        layout.mobileSidebar.hide()
         props.setHoverSession(undefined)
         if (layout.sidebar.opened()) return
         props.clearHoverProjectSoon()

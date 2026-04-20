@@ -208,6 +208,8 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const language = useLanguage()
   const params = useParams()
 
+  let creating = false
+
   const errorMessage = (err: unknown) => {
     if (err && typeof err === "object" && "data" in err) {
       const data = (err as { data?: { message?: string } }).data
@@ -290,7 +292,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const mode = input.mode()
 
     if (text.trim().length === 0 && images.length === 0 && input.commentCount() === 0) {
-      if (input.working()) abort()
+      abort()
       return
     }
 
@@ -357,6 +359,8 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     let session = input.info()
     if (!session && isNewSession) {
+      if (creating) return
+      creating = true
       const created = await client.session
         .create()
         .then((x) => x.data ?? undefined)
@@ -366,6 +370,9 @@ export function createPromptSubmit(input: PromptSubmitInput) {
             description: errorMessage(err),
           })
           return undefined
+        })
+        .finally(() => {
+          creating = false
         })
       if (created) {
         seed(sessionDirectory, created)

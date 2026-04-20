@@ -209,7 +209,7 @@ export function SessionSidePanel(props: {
         class="relative min-w-0 h-full flex shrink-0 overflow-hidden bg-background-base"
         classList={{
           "pointer-events-none": !open(),
-          "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+          "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none":
             !props.size.active() && !props.reviewSnap,
         }}
         style={{ width: panelWidth() }}
@@ -305,12 +305,12 @@ export function SessionSidePanel(props: {
                   </div>
 
                   <Show when={reviewTab()}>
-                    <Tabs.Content value="review" class="flex flex-col h-full overflow-hidden contain-strict">
+                    <Tabs.Content value="review" class="flex flex-col h-full overflow-hidden">
                       <Show when={activeTab() === "review"}>{props.reviewPanel()}</Show>
                     </Tabs.Content>
                   </Show>
 
-                  <Tabs.Content value="empty" class="flex flex-col h-full overflow-hidden contain-strict">
+                  <Tabs.Content value="empty" class="flex flex-col h-full overflow-hidden">
                     <Show when={activeTab() === "empty"}>
                       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                         <div class="h-full px-6 pb-42 -mt-4 flex flex-col items-center justify-center text-center gap-6">
@@ -324,7 +324,7 @@ export function SessionSidePanel(props: {
                   </Tabs.Content>
 
                   <Show when={contextOpen()}>
-                    <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
+                    <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden">
                       <Show when={activeTab() === "context"}>
                         <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                           <SessionContextTab />
@@ -360,7 +360,7 @@ export function SessionSidePanel(props: {
             class="relative min-w-0 h-full shrink-0 overflow-hidden"
             classList={{
               "pointer-events-none": !fileOpen(),
-              "transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+              "transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none":
                 !props.size.active(),
             }}
             style={{ width: treeWidth() }}

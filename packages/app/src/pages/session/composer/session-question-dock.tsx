@@ -11,47 +11,6 @@ import { useSDK } from "@/context/sdk"
 
 const cache = new Map<string, { tab: number; answers: QuestionAnswer[]; custom: string[]; customOn: boolean[] }>()
 
-function Mark(props: { multi: boolean; picked: boolean; onClick?: (event: MouseEvent) => void }) {
-  return (
-    <span data-slot="question-option-check" aria-hidden="true" onClick={props.onClick}>
-      <span data-slot="question-option-box" data-type={props.multi ? "checkbox" : "radio"} data-picked={props.picked}>
-        <Show when={props.multi} fallback={<span data-slot="question-option-radio-dot" />}>
-          <Icon name="check-small" size="small" />
-        </Show>
-      </span>
-    </span>
-  )
-}
-
-function Option(props: {
-  multi: boolean
-  picked: boolean
-  label: string
-  description?: string
-  disabled: boolean
-  onClick: VoidFunction
-}) {
-  return (
-    <button
-      type="button"
-      data-slot="question-option"
-      data-picked={props.picked}
-      role={props.multi ? "checkbox" : "radio"}
-      aria-checked={props.picked}
-      disabled={props.disabled}
-      onClick={props.onClick}
-    >
-      <Mark multi={props.multi} picked={props.picked} />
-      <span data-slot="question-option-main">
-        <span data-slot="option-label">{props.label}</span>
-        <Show when={props.description}>
-          <span data-slot="option-description">{props.description}</span>
-        </Show>
-      </span>
-    </button>
-  )
-}
-
 export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit: () => void }> = (props) => {
   const sdk = useSDK()
   const language = useLanguage()
@@ -82,9 +41,6 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     return language.t("session.question.progress", { current: n, total: total() })
   })
 
-  const customLabel = () => language.t("ui.messagePart.option.typeOwnAnswer")
-  const customPlaceholder = () => language.t("ui.question.custom.placeholder")
-
   const last = createMemo(() => store.tab >= total() - 1)
 
   const customUpdate = (value: string, selected: boolean = on()) => {
@@ -110,20 +66,22 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   const measure = () => {
     if (!root) return
 
-    const scroller = document.querySelector(".scroll-view__viewport")
-    const head = scroller instanceof HTMLElement ? scroller.firstElementChild : undefined
-    const top =
-      head instanceof HTMLElement && head.classList.contains("sticky") ? head.getBoundingClientRect().bottom : 0
-    if (!top) {
-      root.style.removeProperty("--question-prompt-max-height")
-      return
-    }
-
     const dock = root.closest('[data-component="session-prompt-dock"]')
     if (!(dock instanceof HTMLElement)) return
 
-    const dockBottom = dock.getBoundingClientRect().bottom
-    const below = Math.max(0, dockBottom - root.getBoundingClientRect().bottom)
+    const scroller = document.querySelector(".scroll-view__viewport")
+    const head = scroller instanceof HTMLElement ? scroller.firstElementChild : undefined
+    const top =
+      head instanceof HTMLElement && head.classList.contains("sticky")
+        ? head.getBoundingClientRect().bottom
+        : scroller instanceof HTMLElement
+          ? scroller.getBoundingClientRect().top
+          : 0
+
+    const vh = window.innerHeight
+    const dockBottom = Math.min(dock.getBoundingClientRect().bottom, vh)
+    const rootBottom = Math.min(root.getBoundingClientRect().bottom, vh)
+    const below = Math.max(0, dockBottom - rootBottom)
     const gap = 8
     const max = Math.max(240, Math.floor(dockBottom - top - gap - below))
     root.style.setProperty("--question-prompt-max-height", `${max}px`)
@@ -166,7 +124,14 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   })
 
   const fail = (err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err)
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === "object" && err !== null && "message" in err
+          ? String((err as { message: unknown }).message)
+          : typeof err === "string"
+            ? err
+            : language.t("common.requestFailed")
     showToast({ title: language.t("common.requestFailed"), description: message })
   }
 
@@ -207,13 +172,6 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
   }
 
   const submit = () => void reply(questions().map((_, i) => store.answers[i] ?? []))
-
-  const answered = (i: number) => {
-    if ((store.answers[i]?.length ?? 0) > 0) return true
-    return store.customOn[i] === true && (store.custom[i] ?? "").trim().length > 0
-  }
-
-  const picked = (answer: string) => store.answers[store.tab]?.includes(answer) ?? false
 
   const pick = (answer: string, custom: boolean = false) => {
     setStore("answers", store.tab, [answer])
@@ -281,24 +239,6 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     customUpdate(input())
   }
 
-  const resizeInput = (el: HTMLTextAreaElement) => {
-    el.style.height = "0px"
-    el.style.height = `${el.scrollHeight}px`
-  }
-
-  const focusCustom = (el: HTMLTextAreaElement) => {
-    setTimeout(() => {
-      el.focus()
-      resizeInput(el)
-    }, 0)
-  }
-
-  const toggleCustomMark = (event: MouseEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    customToggle()
-  }
-
   const next = () => {
     if (sending()) return
     if (store.editing) commitCustom()
@@ -339,7 +279,10 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
                   type="button"
                   data-slot="question-progress-segment"
                   data-active={i() === store.tab}
-                  data-answered={answered(i())}
+                  data-answered={
+                    (store.answers[i()]?.length ?? 0) > 0 ||
+                    (store.customOn[i()] === true && (store.custom[i()] ?? "").trim().length > 0)
+                  }
                   disabled={sending()}
                   onClick={() => jump(i())}
                   aria-label={`${language.t("ui.tool.questions")} ${i() + 1}`}
@@ -373,23 +316,43 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
       </Show>
       <div data-slot="question-options">
         <For each={options()}>
-          {(opt, i) => (
-            <Option
-              multi={multi()}
-              picked={picked(opt.label)}
-              label={opt.label}
-              description={opt.description}
-              disabled={sending()}
-              onClick={() => selectOption(i())}
-            />
-          )}
+          {(opt, i) => {
+            const picked = () => store.answers[store.tab]?.includes(opt.label) ?? false
+            return (
+              <button
+                data-slot="question-option"
+                data-picked={picked()}
+                role={multi() ? "checkbox" : "radio"}
+                aria-checked={picked()}
+                disabled={sending()}
+                onClick={() => selectOption(i())}
+              >
+                <span data-slot="question-option-check" aria-hidden="true">
+                  <span
+                    data-slot="question-option-box"
+                    data-type={multi() ? "checkbox" : "radio"}
+                    data-picked={picked()}
+                  >
+                    <Show when={multi()} fallback={<span data-slot="question-option-radio-dot" />}>
+                      <Icon name="check-small" size="small" />
+                    </Show>
+                  </span>
+                </span>
+                <span data-slot="question-option-main">
+                  <span data-slot="option-label">{opt.label}</span>
+                  <Show when={opt.description}>
+                    <span data-slot="option-description">{opt.description}</span>
+                  </Show>
+                </span>
+              </button>
+            )
+          }}
         </For>
 
         <Show
           when={store.editing}
           fallback={
             <button
-              type="button"
               data-slot="question-option"
               data-custom="true"
               data-picked={on()}
@@ -398,10 +361,24 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
               disabled={sending()}
               onClick={customOpen}
             >
-              <Mark multi={multi()} picked={on()} onClick={toggleCustomMark} />
+              <span
+                data-slot="question-option-check"
+                aria-hidden="true"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  customToggle()
+                }}
+              >
+                <span data-slot="question-option-box" data-type={multi() ? "checkbox" : "radio"} data-picked={on()}>
+                  <Show when={multi()} fallback={<span data-slot="question-option-radio-dot" />}>
+                    <Icon name="check-small" size="small" />
+                  </Show>
+                </span>
+              </span>
               <span data-slot="question-option-main">
-                <span data-slot="option-label">{customLabel()}</span>
-                <span data-slot="option-description">{input() || customPlaceholder()}</span>
+                <span data-slot="option-label">{language.t("ui.messagePart.option.typeOwnAnswer")}</span>
+                <span data-slot="option-description">{input() || language.t("ui.question.custom.placeholder")}</span>
               </span>
             </button>
           }
@@ -426,13 +403,33 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
               commitCustom()
             }}
           >
-            <Mark multi={multi()} picked={on()} onClick={toggleCustomMark} />
+            <span
+              data-slot="question-option-check"
+              aria-hidden="true"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                customToggle()
+              }}
+            >
+              <span data-slot="question-option-box" data-type={multi() ? "checkbox" : "radio"} data-picked={on()}>
+                <Show when={multi()} fallback={<span data-slot="question-option-radio-dot" />}>
+                  <Icon name="check-small" size="small" />
+                </Show>
+              </span>
+            </span>
             <span data-slot="question-option-main">
-              <span data-slot="option-label">{customLabel()}</span>
+              <span data-slot="option-label">{language.t("ui.messagePart.option.typeOwnAnswer")}</span>
               <textarea
-                ref={focusCustom}
+                ref={(el) =>
+                  setTimeout(() => {
+                    el.focus()
+                    el.style.height = "0px"
+                    el.style.height = `${el.scrollHeight}px`
+                  }, 0)
+                }
                 data-slot="question-custom-input"
-                placeholder={customPlaceholder()}
+                placeholder={language.t("ui.question.custom.placeholder")}
                 value={input()}
                 rows={1}
                 disabled={sending()}
@@ -448,7 +445,8 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
                 }}
                 onInput={(e) => {
                   customUpdate(e.currentTarget.value)
-                  resizeInput(e.currentTarget)
+                  e.currentTarget.style.height = "0px"
+                  e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
                 }}
               />
             </span>

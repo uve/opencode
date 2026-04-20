@@ -99,9 +99,11 @@ export function Tooltip(props: TooltipProps) {
     onCleanup(() => obs.disconnect())
   })
 
+  const touch = typeof window !== "undefined" && window.matchMedia?.("(hover: none), (pointer: coarse)").matches
+
   return (
     <Switch>
-      <Match when={local.inactive}>{local.children}</Match>
+      <Match when={local.inactive || touch}>{local.children}</Match>
       <Match when={true}>
         <KobalteTooltip
           gutter={4}
