@@ -1,7 +1,6 @@
 import { createEffect, createMemo, For, Show } from "solid-js"
 import { A, useParams } from "@solidjs/router"
 import { Portal } from "solid-js/web"
-import { useLayout } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { useNotification } from "@/context/notification"
 import { Spinner } from "@opencode-ai/ui/spinner"
@@ -14,21 +13,21 @@ const MAX_TABS = 5
 type Tab = Session & { slug: string; name: string }
 
 export function SessionTabsStrip() {
-  const layout = useLayout()
   const globalSync = useGlobalSync()
   const notification = useNotification()
   const params = useParams()
 
   const tabs = createMemo(() => {
-    const projects = layout.projects.list()
+    const projects = globalSync.data.project ?? []
     const seen = new Set<string>()
     const result: Tab[] = []
 
     for (const project of projects) {
+      if (!project.worktree) continue
       const [store] = globalSync.child(project.worktree, { bootstrap: true })
       const sessions = store.session ?? []
       const slug = base64Encode(project.worktree)
-      const name = project.name || getFilename(project.worktree)
+      const name = getFilename(project.worktree)
 
       for (const session of sessions) {
         if (session.parentID || session.time?.archived) continue
