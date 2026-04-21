@@ -31,7 +31,6 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { checksum } from "@opencode-ai/shared/util/encode"
 import { useSearchParams } from "@solidjs/router"
 import { NewSessionView, SessionHeader } from "@/components/session"
-import { SessionTabsStrip } from "@/components/session-tabs-strip"
 import { useComments } from "@/context/comments"
 import { getSessionPrefetch, SESSION_PREFETCH_TTL } from "@/context/global-sync/session-prefetch"
 import { useGlobalSync } from "@/context/global-sync"
@@ -1802,7 +1801,6 @@ export default function Page() {
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
       {sessionSync() ?? ""}
       <SessionHeader />
-      <SessionTabsStrip />
       <div class="flex-1 min-h-0 flex flex-col md:flex-row">
         <Show when={false && !isDesktop() && !!params.id}>
           <Tabs value={store.mobileTab} class="h-auto">

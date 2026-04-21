@@ -44,6 +44,8 @@ import { TerminalProvider } from "@/context/terminal"
 import { VoiceProvider } from "@/context/voice"
 import DirectoryLayout from "@/pages/directory-layout"
 import Layout from "@/pages/layout"
+import { CustomMount } from "@/custom"
+import { RightRail } from "@/custom/right-rail"
 import { ErrorPage } from "./pages/error"
 import { useCheckServerHealth } from "./utils/server-health"
 
@@ -113,7 +115,10 @@ function SessionProviders(props: ParentProps) {
       <FileProvider>
         <PromptProvider>
           <VoiceProvider>
-            <CommentsProvider>{props.children}</CommentsProvider>
+            <CommentsProvider>
+              {props.children}
+              <RightRail />
+            </CommentsProvider>
           </VoiceProvider>
         </PromptProvider>
       </FileProvider>
@@ -127,6 +132,7 @@ function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
       {/*<Suspense fallback={<Loading />}>*/}
       {props.appChildren}
       {props.children}
+      <CustomMount />
       {/*</Suspense>*/}
     </AppShellProviders>
   )

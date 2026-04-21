@@ -2,7 +2,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { Show } from "solid-js"
 import { useLanguage } from "@/context/language"
-import { useVoice } from "@/context/voice"
+import { useVoice } from "./voice-context"
 
 /** Thin button — all logic + double-tap protection live in VoiceProvider */
 export function VoiceRecorderButton() {

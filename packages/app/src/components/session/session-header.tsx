@@ -281,6 +281,7 @@ export function SessionHeader() {
       <Show when={search() && centerMount()}>
         {(mount) => (
           <Portal mount={mount()}>
+            <div data-component="header-search" class="contents">
             <Button
               type="button"
               variant="ghost"
@@ -305,6 +306,7 @@ export function SessionHeader() {
                 )}
               </Show>
             </Button>
+            </div>
           </Portal>
         )}
       </Show>
@@ -313,7 +315,7 @@ export function SessionHeader() {
           <Portal mount={mount()}>
             <div class="flex items-center gap-2">
               <Show when={projectDirectory()}>
-                <div class="hidden xl:flex items-center">
+                <div class="hidden xl:flex items-center" data-component="header-open-or-copy">
                   <Show
                     when={canOpen()}
                     fallback={

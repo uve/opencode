@@ -1,6 +1,5 @@
 import { Show, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { Portal } from "solid-js/web"
 import { useNavigate } from "@solidjs/router"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { PromptInput } from "@/components/prompt-input"
@@ -17,9 +16,6 @@ import { SessionRevertDock } from "@/pages/session/composer/session-revert-dock"
 import type { SessionComposerState } from "@/pages/session/composer/session-composer-state"
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
 import type { FollowupDraft } from "@/components/prompt-input/submit"
-import { VoiceRecorderButton } from "@/components/prompt-input/voice-recorder"
-import { VoiceModeButton } from "@/components/prompt-input/voice-mode"
-import { ScrollButtons } from "@/components/prompt-input/scroll-buttons"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 
 export function SessionComposerRegion(props: {
@@ -299,17 +295,6 @@ export function SessionComposerRegion(props: {
           </Show>
         </Show>
       </div>
-
-      {/* All right-side buttons in one column — scroll + voice */}
-      <Portal>
-        <div class="fixed right-3 top-1/2 -translate-y-1/2 z-50 pointer-events-auto flex flex-col items-end gap-3">
-          <div class="flex flex-col items-end gap-3 mb-4">
-            <ScrollButtons />
-          </div>
-          <VoiceModeButton />
-          <VoiceRecorderButton />
-        </div>
-      </Portal>
     </div>
   )
 }

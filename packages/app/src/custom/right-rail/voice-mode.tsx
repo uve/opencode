@@ -1,6 +1,6 @@
 import { Icon } from "@opencode-ai/ui/icon"
 import { Show } from "solid-js"
-import { useVoice } from "@/context/voice"
+import { useVoice } from "./voice-context"
 
 /** Thin button — all logic lives in VoiceProvider */
 export function VoiceModeButton() {
