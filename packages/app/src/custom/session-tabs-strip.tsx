@@ -26,7 +26,7 @@ export function SessionTabsStrip() {
 
   const maxTabs = createMemo(() => (isMobile() ? MAX_TABS_MOBILE : MAX_TABS_DESKTOP))
 
-  const tabs = createMemo(() => registry.allSessions().slice(0, maxTabs()))
+  const tabs = createMemo(() => registry.top(maxTabs()))
 
   // Update document title with count of completed unseen sessions
   const unseen = createMemo(() => {

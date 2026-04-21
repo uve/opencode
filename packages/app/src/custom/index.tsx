@@ -9,7 +9,7 @@ import { useGlobalSync } from "@/context/global-sync"
 import { features } from "./features"
 import { CssHide, SlotPortal } from "./slot"
 import { SessionTabsStrip } from "./session-tabs-strip"
-import { SessionsRegistryProvider, useSessionsRegistry } from "./sessions-registry"
+import { SessionsRegistryProvider } from "./sessions-registry"
 
 export function CustomMount() {
   const globalSync = useGlobalSync()
@@ -22,7 +22,6 @@ export function CustomMount() {
 
   return (
     <SessionsRegistryProvider>
-      <DebugRegistry />
       <Show when={features.sessionTabs}>
         <SlotPortal selector="#opencode-titlebar-center">
           <SessionTabsStrip />
@@ -42,14 +41,4 @@ export function CustomMount() {
       </Show>
     </SessionsRegistryProvider>
   )
-}
-
-function DebugRegistry() {
-  const registry = useSessionsRegistry()
-  onMount(() => {
-    // Debug handle:
-    //   window.__sessionsRegistry.allSessions().map(s => ({title: s.title, project: s.projectName}))
-    ;(window as any).__sessionsRegistry = registry
-  })
-  return null
 }
