@@ -65,5 +65,12 @@ export default defineConfig({
         },
       },
     },
+    {
+      name: "tabs-sync",
+      testMatch: "tabs-sync.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+    },
   ],
 })

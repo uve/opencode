@@ -1,21 +1,15 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { A, useParams } from "@solidjs/router"
-import { useGlobalSync } from "@/context/global-sync"
 import { useNotification } from "@/context/notification"
-import { decode64 } from "@/utils/base64"
 import { Spinner } from "@opencode-ai/ui/spinner"
-import { base64Encode } from "@opencode-ai/shared/util/encode"
-import { getFilename } from "@opencode-ai/shared/util/path"
-import type { Session } from "@opencode-ai/sdk/v2/client"
+import { useSessionsRegistry, type RegistrySession } from "./sessions-registry"
 
 const MAX_TABS_DESKTOP = 10
 const MAX_TABS_MOBILE = 5
 const MOBILE_BREAKPOINT = 768
 
-type Tab = Session & { slug: string; name: string }
-
 export function SessionTabsStrip() {
-  const globalSync = useGlobalSync()
+  const registry = useSessionsRegistry()
   const notification = useNotification()
   const params = useParams()
 
@@ -32,48 +26,7 @@ export function SessionTabsStrip() {
 
   const maxTabs = createMemo(() => (isMobile() ? MAX_TABS_MOBILE : MAX_TABS_DESKTOP))
 
-  // Step 1: derive the set of worktrees we want to track.
-  const worktrees = createMemo(() => {
-    const set = new Set<string>()
-    for (const project of globalSync.data.project ?? []) {
-      if (project.worktree) set.add(project.worktree)
-    }
-    const activeDir = decode64(params.dir)
-    if (activeDir) set.add(activeDir)
-    return [...set]
-  })
-
-  // Step 2: eagerly subscribe to each worktree's child store. Holding refs in
-  // a signal makes Solid track each store's `session` reactively in the next memo.
-  const [stores, setStores] = createSignal<Array<{ worktree: string; store: ReturnType<typeof globalSync.child>[0] }>>([])
-  createEffect(() => {
-    const next = worktrees().map((worktree) => {
-      const [store] = globalSync.child(worktree, { bootstrap: true })
-      return { worktree, store }
-    })
-    setStores(next)
-  })
-
-  // Step 3: collect tabs from all subscribed stores. This memo depends on each
-  // store's `session` array, so it re-runs whenever any store gets new sessions.
-  const tabs = createMemo(() => {
-    const seen = new Set<string>()
-    const result: Tab[] = []
-
-    for (const { worktree, store } of stores()) {
-      const slug = base64Encode(worktree)
-      const name = getFilename(worktree)
-      for (const session of store.session ?? []) {
-        if (session.parentID || session.time?.archived) continue
-        if (seen.has(session.id)) continue
-        seen.add(session.id)
-        result.push({ ...session, slug, name })
-      }
-    }
-
-    result.sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
-    return result.slice(0, maxTabs())
-  })
+  const tabs = createMemo(() => registry.allSessions().slice(0, maxTabs()))
 
   // Update document title with count of completed unseen sessions
   const unseen = createMemo(() => {
@@ -101,13 +54,14 @@ export function SessionTabsStrip() {
   )
 }
 
-function SessionTab(props: { tab: Tab; active: boolean }) {
-  const globalSync = useGlobalSync()
+function SessionTab(props: { tab: RegistrySession; active: boolean }) {
+  const registry = useSessionsRegistry()
   const notification = useNotification()
 
-  const [store] = globalSync.child(props.tab.directory)
-
-  const status = createMemo(() => store.session_status[props.tab.id])
+  const status = createMemo(() => {
+    const store = registry.getStore(props.tab.worktree)
+    return store?.session_status[props.tab.id]
+  })
   const working = createMemo(() => {
     const s = status()
     return s?.type === "busy" || s?.type === "retry"

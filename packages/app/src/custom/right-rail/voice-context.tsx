@@ -608,7 +608,26 @@ function initVoice() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
+      // Pick a mimeType that BOTH the browser's MediaRecorder and OpenAI
+      // Whisper accept. Firefox defaults to "audio/ogg; codecs=opus";
+      // Chrome/Edge default to "audio/webm; codecs=opus"; Safari does mp4.
+      // We try in Whisper-supported priority order and fall back to the
+      // browser default (undefined constructor arg).
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/ogg",
+        "audio/mp4",
+      ]
+      const preferred = candidates.find((t) => {
+        try {
+          return typeof MediaRecorder.isTypeSupported === "function" && MediaRecorder.isTypeSupported(t)
+        } catch {
+          return false
+        }
+      })
+      const mr = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream)
       chunks = []
 
       mr.ondataavailable = (e) => {
@@ -638,7 +657,19 @@ function initVoice() {
 
         try {
           const blob = new Blob(chunks, { type: mr.mimeType })
-          const ext = mr.mimeType.includes("webm") ? "webm" : "mp4"
+          // Map the actual container to a Whisper-accepted extension.
+          // Whisper accepts: mp3, mp4, mpeg, mpga, m4a, wav, webm, ogg, oga, flac.
+          // Firefox records ogg/opus by default; Chrome records webm/opus.
+          const lowerType = (mr.mimeType || "").toLowerCase()
+          const ext = lowerType.includes("webm")
+            ? "webm"
+            : lowerType.includes("ogg")
+              ? "ogg"
+              : lowerType.includes("mp4") || lowerType.includes("m4a") || lowerType.includes("aac")
+                ? "mp4"
+                : lowerType.includes("wav")
+                  ? "wav"
+                  : "webm" // safe default — most browsers default to webm/opus
           const form = new FormData()
           form.append("file", blob, `recording.${ext}`)
           form.append("model", settings.voice.model())
