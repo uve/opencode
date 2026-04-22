@@ -1,6 +1,7 @@
 ## Debugging
 
-- NEVER try to restart the app, or the server process, EVER.
+- Do NOT restart or rebuild the app/server on your own initiative.
+- If the user explicitly asks you to rebuild or restart, you may do so. Use `nohup bash cmd/build.sh &` (from repo root) for rebuild+restart, or `systemctl --user restart opencode.service` for restart only.
 
 ## Local Dev
 

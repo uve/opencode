@@ -72,5 +72,21 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
       },
     },
+    {
+      name: "tabs-iphone-swipe",
+      testMatch: "tabs-iphone-swipe.spec.ts",
+      use: {
+        ...devices["iPhone 15"],
+        hasTouch: true,
+      },
+    },
+    {
+      name: "tabs-iphone-swipe-mock",
+      testMatch: "tabs-iphone-swipe-mock.spec.ts",
+      use: {
+        ...devices["iPhone 15"],
+        hasTouch: true,
+      },
+    },
   ],
 })

@@ -6,6 +6,7 @@
  */
 import { onMount, Show } from "solid-js"
 import { useGlobalSync } from "@/context/global-sync"
+import { useLayout } from "@/context/layout"
 import { features } from "./features"
 import { CssHide, SlotPortal } from "./slot"
 import { SessionTabsStrip } from "./session-tabs-strip"
@@ -13,11 +14,14 @@ import { SessionsRegistryProvider } from "./sessions-registry"
 
 export function CustomMount() {
   const globalSync = useGlobalSync()
+  const layout = useLayout()
 
   onMount(() => {
-    // Debug handle so we can inspect from DevTools console:
+    // Debug handles for DevTools / e2e tests:
     //   window.__globalSync.data.project.map(p => p.worktree)
+    //   window.__layout.projects.open("/path/to/dir")
     ;(window as any).__globalSync = globalSync
+    ;(window as any).__layout = layout
   })
 
   return (

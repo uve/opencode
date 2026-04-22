@@ -2,7 +2,7 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createStore } from "solid-js/store"
 import { createEffect, createMemo, createSignal, on, onCleanup, onMount, untrack } from "solid-js"
-import { useParams } from "@solidjs/router"
+import { useNavigate, useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { useServer } from "@/context/server"
@@ -40,6 +40,8 @@ const noop = {
     cooldown: NOOP_MEMO,
     toggle: async () => {},
     cancel: () => false,
+    queueNavigation: (_url: string) => {},
+    cancelPendingNavigation: () => {},
   },
   tts: {
     speaking: NOOP_MEMO,
@@ -68,6 +70,7 @@ interface CapturedSession {
 
 function initVoice() {
   const params = useParams()
+  const navigate = useNavigate()
   const language = useLanguage()
   const prompt = usePrompt()
   const layout = useLayout()
@@ -104,6 +107,26 @@ function initVoice() {
   let leaderAbort: AbortController | undefined
   let leaderRelease: (() => void) | undefined
   const focused = () => (typeof document !== "undefined" ? document.hasFocus() : true)
+
+  // ─── Persist stream-active across tab switches and page reloads ──
+  // sessionStorage (not localStorage): voice does NOT auto-resume after the
+  // browser is fully closed and reopened (avoids surprising mic activation),
+  // but does resume across reloads and route changes within the same session.
+  const STREAM_PERSIST_KEY = "opencode-voice-stream-active"
+  const persistStreamState = (active: boolean) => {
+    try {
+      if (typeof sessionStorage === "undefined") return
+      if (active) sessionStorage.setItem(STREAM_PERSIST_KEY, "1")
+      else sessionStorage.removeItem(STREAM_PERSIST_KEY)
+    } catch {}
+  }
+  const wasStreamActive = (() => {
+    try {
+      return typeof sessionStorage !== "undefined" && sessionStorage.getItem(STREAM_PERSIST_KEY) === "1"
+    } catch {
+      return false
+    }
+  })()
 
   // ─── TTS refs ───────────────────────────────────────────────
   const [ttsTarget, setTtsTarget] = createSignal<string | undefined>()
@@ -410,6 +433,7 @@ function initVoice() {
     unlockAudio()
     if (store.stream.active) return
     setStore("stream", { active: true, paused: false })
+    persistStreamState(true)
     channel?.postMessage({ type: "state", active: true, paused: false })
     tryBecomeLeader()
   }
@@ -417,6 +441,7 @@ function initVoice() {
   const streamDeactivate = () => {
     channel?.postMessage({ type: "deactivate" })
     setStore("stream", { active: false, paused: false })
+    persistStreamState(false)
     cancelLeader()
   }
 
@@ -428,6 +453,39 @@ function initVoice() {
     }
     streamDeactivate()
   }
+
+  // ─── Pending navigation queue ───────────────────────────────
+  // When a tab is clicked while transcription is in flight, navigation is
+  // deferred until transcribe completes (so the captured speech is sent to
+  // the originating session before we leave it). Last-click wins.
+  let pendingNavUrl: string | undefined
+  function queueNavigation(url: string) {
+    pendingNavUrl = url
+  }
+  function cancelPendingNavigation() {
+    pendingNavUrl = undefined
+  }
+  // Watch transcribing → false transition; if a pending nav is queued, fire it.
+  createEffect(
+    on(
+      () => store.recorder.transcribing,
+      (now, prev) => {
+        if (prev !== true || now !== false) return
+        const url = pendingNavUrl
+        if (!url) return
+        // Tiny delay so send() inside transcribe-finalize can dispatch first.
+        setTimeout(() => {
+          const url2 = pendingNavUrl
+          pendingNavUrl = undefined
+          if (url2) {
+            console.log("[Voice] firing deferred navigation to", url2)
+            navigate(url2)
+          }
+        }, 150)
+      },
+      { defer: true },
+    ),
+  )
 
   const streamPause = () => {
     if (store.stream.paused) return
@@ -486,6 +544,37 @@ function initVoice() {
     streamDeactivate()
     channel?.close()
   })
+
+  // Auto-restore stream state from sessionStorage. This makes voice mode
+  // "sticky" across reloads and route changes within the same browser session.
+  onMount(() => {
+    if (wasStreamActive && !store.stream.active) {
+      console.log("[Voice] auto-restoring stream from sessionStorage")
+      void streamActivate()
+    }
+  })
+
+  // Defensive: when params.id changes and stream is active, log so we know
+  // the voice context survived the route transition. send() already uses
+  // params.id dynamically, so transcripts naturally route to current session.
+  // Also clear `captured` if it points to a session we are no longer on AND
+  // there is no recording/transcribing in flight — prevents stale capture
+  // from sending stream speech to the wrong session.
+  createEffect(
+    on(
+      () => params.id,
+      (id, prev) => {
+        if (prev === undefined || id === prev) return
+        if (!store.stream.active) return
+        const inFlight = store.recorder.recording || store.recorder.transcribing
+        if (!inFlight && captured && captured.id !== id) {
+          console.log("[Voice] tab switched, clearing stale captured session", captured.id, "→", id)
+          captured = undefined
+        }
+      },
+      { defer: true },
+    ),
+  )
 
   // ─── Global shortcuts: Enter → record, Esc → cancel, Mouse4 → record ─
 
@@ -867,27 +956,29 @@ function initVoice() {
     }
   }
 
-  // Watch session status: when ttsTarget session goes busy → idle, speak
-  createEffect(
-    on(
-      () => {
-        const id = ttsTarget()
-        if (!id) return undefined
-        const type = sync.data.session_status[id]?.type
-        console.log("[TTS] watching session", id, "status:", type)
-        return type
-      },
-      (type, prev) => {
-        console.log("[TTS] status transition:", prev, "→", type)
-        if (prev === "busy" && type === "idle") {
-          const id = untrack(ttsTarget)
-          setTtsTarget(undefined)
-          if (id) void speak(id)
-        }
-      },
-      { defer: true },
-    ),
-  )
+  // [TEMPORARILY DISABLED] Auto-speak on session busy → idle.
+  // Re-enable by uncommenting the createEffect block below.
+  // createEffect(
+  //   on(
+  //     () => {
+  //       const id = ttsTarget()
+  //       if (!id) return undefined
+  //       const type = sync.data.session_status[id]?.type
+  //       console.log("[TTS] watching session", id, "status:", type)
+  //       return type
+  //     },
+  //     (type, prev) => {
+  //       console.log("[TTS] status transition:", prev, "→", type)
+  //       if (prev === "busy" && type === "idle") {
+  //         const id = untrack(ttsTarget)
+  //         setTtsTarget(undefined)
+  //         if (id) void speak(id)
+  //       }
+  //     },
+  //     { defer: true },
+  //   ),
+  // )
+  void speak // keep reference so unused-var lint doesn't fire
 
   // Stop TTS when stream mode deactivates
   createEffect(() => {
@@ -958,6 +1049,8 @@ function initVoice() {
       cooldown: createMemo(() => store.recorder.cooldown),
       toggle: recorderToggle,
       cancel: recorderCancel,
+      queueNavigation,
+      cancelPendingNavigation,
     },
     tts: {
       speaking: createMemo(() => store.tts.speaking),
