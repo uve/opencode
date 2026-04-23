@@ -4,6 +4,7 @@ import { InstallationVersion } from "@/installation/version"
 import { iife } from "@/util/iife"
 import { Log } from "../../util"
 import { setTimeout as sleep } from "node:timers/promises"
+import { randomUUID } from "node:crypto"
 import { CopilotModels } from "./models"
 import { MessageV2 } from "@/session/message-v2"
 
@@ -13,6 +14,41 @@ const CLIENT_ID = "Ov23li8tweQw6odWQebz"
 // Add a small safety buffer when polling to avoid hitting the server
 // slightly too early due to clock skew / timer drift.
 const OAUTH_POLLING_SAFETY_MARGIN_MS = 3000 // 3 seconds
+
+// custom-fork: GitHub Copilot CLI impersonation — required for enterprise
+// endpoint to accept requests and to access enterprise-only models like
+// `claude-opus-4.6-1m`. Headers/UA mirror the real Copilot CLI exactly.
+const COPILOT_CLI_VERSION = "1.0.16"
+const COPILOT_API_VERSION = "2026-01-09"
+const COPILOT_INTEGRATION_ID = "copilot-developer-cli"
+// Persistent per-process IDs (Copilot CLI generates these per session/machine)
+const clientSessionId = randomUUID()
+const clientMachineId = randomUUID()
+// Cache for discovered enterprise API endpoint (null = not yet attempted)
+let discoveredApiEndpoint: string | undefined | null = null
+
+const cliUserAgent = `copilot/${COPILOT_CLI_VERSION} (client/github/cli ${process.platform} ${process.version}) term/unknown`
+
+// custom-fork: discover real Copilot API endpoint via /copilot_internal/user.
+// For enterprise users this returns e.g. `https://api.enterprise.githubcopilot.com`.
+// For .com users it usually returns `https://api.githubcopilot.com` (no-op).
+async function discoverApiEndpoint(refresh: string): Promise<string | undefined> {
+  if (discoveredApiEndpoint !== null) return discoveredApiEndpoint ?? undefined
+  const resp = await fetch("https://api.github.com/copilot_internal/user", {
+    headers: {
+      Authorization: `Bearer ${refresh}`,
+      Accept: "application/json",
+      "User-Agent": cliUserAgent,
+    },
+  }).catch(() => undefined)
+  if (!resp || !resp.ok) {
+    discoveredApiEndpoint = undefined
+    return undefined
+  }
+  const data = (await resp.json().catch(() => undefined)) as { endpoints?: { api?: string } } | undefined
+  discoveredApiEndpoint = data?.endpoints?.api ?? undefined
+  return discoveredApiEndpoint ?? undefined
+}
 function normalizeDomain(url: string) {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "")
 }
@@ -66,18 +102,24 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
 
         const auth = ctx.auth
 
+        // custom-fork: prefer discovered endpoint (enterprise routing) over
+        // hardcoded base. Falls back to enterpriseUrl-derived base, then to
+        // public api.githubcopilot.com.
+        const discovered = auth.enterpriseUrl ? undefined : await discoverApiEndpoint(auth.refresh)
+        const baseURL = discovered ?? base(auth.enterpriseUrl)
+
         return CopilotModels.get(
-          base(auth.enterpriseUrl),
+          baseURL,
           {
             Authorization: `Bearer ${auth.refresh}`,
-            "User-Agent": `opencode/${InstallationVersion}`,
+            "User-Agent": cliUserAgent,
+            "X-GitHub-Api-Version": COPILOT_API_VERSION,
+            "Copilot-Integration-Id": COPILOT_INTEGRATION_ID,
           },
           provider.models,
         ).catch((error) => {
           log.error("failed to fetch copilot models", { error })
-          return Object.fromEntries(
-            Object.entries(provider.models).map(([id, model]) => [id, fix(model, base(auth.enterpriseUrl))]),
-          )
+          return Object.fromEntries(Object.entries(provider.models).map(([id, model]) => [id, fix(model, baseURL)]))
         })
       },
     },
@@ -150,9 +192,19 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
             const headers: Record<string, string> = {
               "x-initiator": isAgent ? "agent" : "user",
               ...(init?.headers as Record<string, string>),
-              "User-Agent": `opencode/${InstallationVersion}`,
+              // custom-fork: full Copilot CLI impersonation. Required for the
+              // enterprise endpoint and for enterprise-only models like
+              // claude-opus-4.6-1m to be served (otherwise: "model not supported").
+              "User-Agent": cliUserAgent,
+              "Openai-Intent": "conversation-agent",
+              "X-GitHub-Api-Version": COPILOT_API_VERSION,
+              "Copilot-Integration-Id": COPILOT_INTEGRATION_ID,
+              "X-Interaction-Id": randomUUID(),
+              "X-Interaction-Type": isAgent ? "conversation-agent" : "conversation-user",
+              "X-Agent-Task-Id": randomUUID(),
+              "X-Client-Session-Id": clientSessionId,
+              "X-Client-Machine-Id": clientMachineId,
               Authorization: `Bearer ${info.refresh}`,
-              "Openai-Intent": "conversation-edits",
             }
 
             if (isVision) {
