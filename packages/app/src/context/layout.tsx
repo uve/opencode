@@ -1,4 +1,4 @@
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, reconcile } from "solid-js/store"
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, type Accessor } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makeEventListener } from "@solid-primitives/event-listener"
@@ -1006,6 +1006,16 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             )
           },
         }
+      },
+      // custom-fork: escape hatch for client-state-sync provider.
+      // Read raw store + bulk replace sessionTabs map. Do not use elsewhere.
+      __custom: {
+        get store() {
+          return store
+        },
+        replaceSessionTabs(next: Record<string, SessionTabs>) {
+          setStore("sessionTabs", reconcile(next))
+        },
       },
     }
   },

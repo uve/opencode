@@ -43,6 +43,13 @@ export default defineConfig({
       },
     },
     {
+      name: "client-state-sync",
+      testMatch: "custom-client-state-sync.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+    },
+    {
       name: "voice-state-unit",
       testMatch: "custom-voice-state.spec.ts",
     },

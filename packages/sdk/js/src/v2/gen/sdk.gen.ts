@@ -19,6 +19,10 @@ import type {
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  CustomClientStateGetResponses,
+  CustomClientStateInput,
+  CustomClientStatePutErrors,
+  CustomClientStatePutResponses,
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
@@ -27,8 +31,14 @@ import type {
   ExperimentalConsoleGetResponses,
   ExperimentalConsoleListOrgsResponses,
   ExperimentalConsoleSwitchOrgResponses,
+  ExperimentalRealtimeSessionErrors,
+  ExperimentalRealtimeSessionResponses,
   ExperimentalResourceListResponses,
   ExperimentalSessionListResponses,
+  ExperimentalTranscribeErrors,
+  ExperimentalTranscribeResponses,
+  ExperimentalTtsErrors,
+  ExperimentalTtsResponses,
   ExperimentalWorkspaceAdaptorListResponses,
   ExperimentalWorkspaceCreateErrors,
   ExperimentalWorkspaceCreateResponses,
@@ -913,7 +923,107 @@ export class Resource extends HeyApiClient {
   }
 }
 
+export class Realtime extends HeyApiClient {
+  /**
+   * Create OpenAI Realtime ephemeral session
+   *
+   * Mint an ephemeral client token for the browser to open a WebRTC connection to OpenAI Realtime API.
+   */
+  public session<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalRealtimeSessionResponses,
+      ExperimentalRealtimeSessionErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/realtime/session",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Experimental extends HeyApiClient {
+  /**
+   * Transcribe audio
+   *
+   * Proxy audio transcription to OpenAI Whisper/GPT-4o-transcribe API.
+   */
+  public transcribe<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalTranscribeResponses,
+      ExperimentalTranscribeErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/transcribe",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Text to speech
+   *
+   * Proxy text-to-speech to OpenAI or ElevenLabs TTS API. Set TTS_ENGINE=elevenlabs and ELEVENLABS_API_KEY to use ElevenLabs. Defaults to OpenAI.
+   */
+  public tts<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperimentalTtsResponses, ExperimentalTtsErrors, ThrowOnError>({
+      url: "/experimental/tts",
+      ...options,
+      ...params,
+    })
+  }
+
   private _workspace?: Workspace
   get workspace(): Workspace {
     return (this._workspace ??= new Workspace({ client: this.client }))
@@ -932,6 +1042,11 @@ export class Experimental extends HeyApiClient {
   private _resource?: Resource
   get resource(): Resource {
     return (this._resource ??= new Resource({ client: this.client }))
+  }
+
+  private _realtime?: Realtime
+  get realtime(): Realtime {
+    return (this._realtime ??= new Realtime({ client: this.client }))
   }
 }
 
@@ -3144,6 +3259,86 @@ export class Sync extends HeyApiClient {
   }
 }
 
+export class ClientState extends HeyApiClient {
+  /**
+   * Get latest client UI state
+   *
+   * Read the current synced client UI blob. Returns {found:false} if no state has been written yet.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CustomClientStateGetResponses, unknown, ThrowOnError>({
+      url: "/custom/client-state",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Write client UI state
+   *
+   * Persist the client UI blob and broadcast a `custom.client_state.updated` event so other connected tabs/devices can reconcile.
+   */
+  public put<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      customClientStateInput?: CustomClientStateInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "customClientStateInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      CustomClientStatePutResponses,
+      CustomClientStatePutErrors,
+      ThrowOnError
+    >({
+      url: "/custom/client-state",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Custom extends HeyApiClient {
+  private _clientState?: ClientState
+  get clientState(): ClientState {
+    return (this._clientState ??= new ClientState({ client: this.client }))
+  }
+}
+
 export class Find extends HeyApiClient {
   /**
    * Find text
@@ -4403,6 +4598,11 @@ export class OpencodeClient extends HeyApiClient {
   private _sync?: Sync
   get sync(): Sync {
     return (this._sync ??= new Sync({ client: this.client }))
+  }
+
+  private _custom?: Custom
+  get custom(): Custom {
+    return (this._custom ??= new Custom({ client: this.client }))
   }
 
   private _find?: Find

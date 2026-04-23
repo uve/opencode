@@ -987,6 +987,15 @@ export type EventSessionDeleted = {
   }
 }
 
+export type EventCustomClientStateUpdated = {
+  type: "custom.client_state.updated"
+  properties: {
+    state: string
+    device_id: string
+    time_updated: number
+  }
+}
+
 export type SyncEventMessageUpdated = {
   type: "sync"
   name: "message.updated.1"
@@ -1156,6 +1165,7 @@ export type GlobalEvent = {
     | EventSessionCreated
     | EventSessionUpdated
     | EventSessionDeleted
+    | EventCustomClientStateUpdated
     | SyncEventMessageUpdated
     | SyncEventMessageRemoved
     | SyncEventMessagePartUpdated
@@ -1988,6 +1998,26 @@ export type ProviderAuthAuthorization = {
   instructions: string
 }
 
+export type CustomClientState = {
+  id: string
+  state: string
+  device_id: string
+  time_created: number
+  time_updated: number
+}
+
+export type CustomClientStateMissing = {
+  found: false
+}
+
+export type CustomClientStateGetResponse = CustomClientState | CustomClientStateMissing
+
+export type CustomClientStateInput = {
+  state: string
+  device_id: string
+  if_match?: number
+}
+
 export type Symbol = {
   name: string
   kind: number
@@ -2082,6 +2112,7 @@ export type Event =
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
+  | EventCustomClientStateUpdated
 
 export type McpStatusConnected = {
   status: "connected"
@@ -3232,6 +3263,89 @@ export type ExperimentalResourceListResponses = {
 
 export type ExperimentalResourceListResponse =
   ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
+
+export type ExperimentalTranscribeData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/transcribe"
+}
+
+export type ExperimentalTranscribeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalTranscribeError = ExperimentalTranscribeErrors[keyof ExperimentalTranscribeErrors]
+
+export type ExperimentalTranscribeResponses = {
+  /**
+   * Transcription result
+   */
+  200: {
+    text: string
+  }
+}
+
+export type ExperimentalTranscribeResponse = ExperimentalTranscribeResponses[keyof ExperimentalTranscribeResponses]
+
+export type ExperimentalTtsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/tts"
+}
+
+export type ExperimentalTtsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalTtsError = ExperimentalTtsErrors[keyof ExperimentalTtsErrors]
+
+export type ExperimentalTtsResponses = {
+  /**
+   * Audio stream
+   */
+  200: unknown
+}
+
+export type ExperimentalRealtimeSessionData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/realtime/session"
+}
+
+export type ExperimentalRealtimeSessionErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalRealtimeSessionError =
+  ExperimentalRealtimeSessionErrors[keyof ExperimentalRealtimeSessionErrors]
+
+export type ExperimentalRealtimeSessionResponses = {
+  /**
+   * Ephemeral session
+   */
+  200: unknown
+}
 
 export type SessionListData = {
   body?: never
@@ -4609,6 +4723,60 @@ export type SyncHistoryListResponses = {
 }
 
 export type SyncHistoryListResponse = SyncHistoryListResponses[keyof SyncHistoryListResponses]
+
+export type CustomClientStateGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/custom/client-state"
+}
+
+export type CustomClientStateGetResponses = {
+  /**
+   * Latest client state
+   */
+  200: CustomClientStateGetResponse
+}
+
+export type CustomClientStateGetResponse2 = CustomClientStateGetResponses[keyof CustomClientStateGetResponses]
+
+export type CustomClientStatePutData = {
+  body?: CustomClientStateInput
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/custom/client-state"
+}
+
+export type CustomClientStatePutErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Optimistic concurrency conflict — caller's if_match is stale
+   */
+  409: {
+    error: string
+    current: CustomClientState
+  }
+}
+
+export type CustomClientStatePutError = CustomClientStatePutErrors[keyof CustomClientStatePutErrors]
+
+export type CustomClientStatePutResponses = {
+  /**
+   * Persisted state
+   */
+  200: CustomClientState
+}
+
+export type CustomClientStatePutResponse = CustomClientStatePutResponses[keyof CustomClientStatePutResponses]
 
 export type FindTextData = {
   body?: never

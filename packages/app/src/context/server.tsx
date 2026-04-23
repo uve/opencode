@@ -290,6 +290,20 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
           setStore("lastProject", key, directory)
         },
       },
+      // custom-fork: escape hatches for client-state-sync provider.
+      // Read raw store + bulk replace per-origin slices. Do not use elsewhere.
+      __custom: {
+        get store() {
+          return store
+        },
+        replaceProjects(key: string, projects: StoredProject[]) {
+          setStore("projects", key, projects)
+        },
+        replaceLastProject(key: string, directory: string | undefined) {
+          if (directory === undefined) setStore("lastProject", key, "")
+          else setStore("lastProject", key, directory)
+        },
+      },
     }
   },
 })

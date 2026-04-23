@@ -26,6 +26,8 @@ import { ExperimentalRoutes } from "./experimental"
 import { ProviderRoutes } from "./provider"
 import { EventRoutes } from "./event"
 import { SyncRoutes } from "./sync"
+// custom-fork: cross-device client UI state sync
+import { ClientStateRoutes } from "@/custom/client-state/route"
 import { InstanceMiddleware } from "./middleware"
 import { jsonRequest } from "./trace"
 
@@ -60,6 +62,7 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
     .route("/question", QuestionRoutes())
     .route("/provider", ProviderRoutes())
     .route("/sync", SyncRoutes())
+    .route("/custom/client-state", ClientStateRoutes())
     .route("/", FileRoutes())
     .route("/", EventRoutes())
     .route("/mcp", McpRoutes())

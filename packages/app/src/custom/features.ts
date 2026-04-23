@@ -25,6 +25,9 @@ export const features = {
 
   /** Voice recorder (push-to-talk transcription) button on the right rail. */
   voiceRecorder: true,
+
+  /** Cross-device client UI state sync (open projects + session tabs) via backend SQLite. */
+  clientStateSync: true,
 }
 
 export type Feature = keyof typeof features

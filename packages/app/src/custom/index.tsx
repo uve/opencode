@@ -11,6 +11,7 @@ import { features } from "./features"
 import { CssHide, SlotPortal } from "./slot"
 import { SessionTabsStrip } from "./session-tabs-strip"
 import { SessionsRegistryProvider } from "./sessions-registry"
+import { ClientStateSyncProvider } from "./client-state-sync/client-state-sync"
 
 export function CustomMount() {
   const globalSync = useGlobalSync()
@@ -26,6 +27,10 @@ export function CustomMount() {
 
   return (
     <SessionsRegistryProvider>
+      <Show when={features.clientStateSync}>
+        <ClientStateSyncProvider />
+      </Show>
+
       <Show when={features.sessionTabs}>
         <SlotPortal selector="#opencode-titlebar-center">
           <SessionTabsStrip />
