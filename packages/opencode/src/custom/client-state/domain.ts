@@ -8,6 +8,7 @@
  * tabs/devices can suppress echoes of their own writes.
  */
 import z from "zod"
+import { Schema } from "effect"
 import { BusEvent } from "@/bus/bus-event"
 
 /** Single shared blob per server instance — single-user model. */
@@ -46,10 +47,10 @@ export type ClientStateInput = z.infer<typeof ClientStateInput>
  */
 export const ClientStateUpdated = BusEvent.define(
   "custom.client_state.updated",
-  z.object({
-    state: z.string(),
-    device_id: z.string(),
-    time_updated: z.number(),
+  Schema.Struct({
+    state: Schema.String,
+    device_id: Schema.String,
+    time_updated: Schema.Number,
   }),
 )
 

@@ -72,14 +72,14 @@ log "service restarted"
 # ── 5. Health check (with rollback) ─────────────────────────────
 set -a && source "$SRC/.env" 2>/dev/null && set +a || true
 PORT="${PORT:-$PORT_DEFAULT}"
-for i in $(seq 1 30); do
-  sleep 1
+for i in $(seq 1 60); do
+  sleep 2
   CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT/global/health" 2>/dev/null || echo "000")
   if [ "$CODE" = "401" ] || [ "$CODE" = "200" ]; then
     log "health OK (HTTP $CODE)"
     break
   fi
-  if [ "$i" = "30" ]; then
+  if [ "$i" = "60" ]; then
     log "ERROR: health check failed (HTTP $CODE)"
     if [ -f "${BIN}.bak" ]; then
       log "rolling back to previous binary..."
