@@ -8,6 +8,7 @@
 //   2) without CLI impersonation headers the enterprise endpoint rejects us.
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { CopilotAuthPlugin } from "@/plugin/github-copilot/copilot"
+import * as ProviderTransform from "@/provider/transform"
 
 const originalFetch = globalThis.fetch
 
@@ -262,4 +263,106 @@ describe("real GitHub Copilot integration", () => {
     const parsed = JSON.parse(body) as { choices?: Array<{ message?: { content?: string } }> }
     expect(parsed.choices?.[0]?.message?.content).toBeDefined()
   }, 30_000)
+
+  test("claude-code-4.7-1m accepts a real request with xhigh reasoning effort", async () => {
+    if (!authFile || !(await authFile.exists())) {
+      console.log(`[skip] set OPENCODE_COPILOT_LIVE_AUTH=/path/to/auth.json to enable`)
+      return
+    }
+    const auth = (await authFile.json()) as { "github-copilot"?: { type?: string; refresh?: string } }
+    const refresh = auth["github-copilot"]?.refresh
+    if (auth["github-copilot"]?.type !== "oauth" || !refresh) {
+      console.log("[skip] no oauth refresh token for github-copilot")
+      return
+    }
+
+    const cliUserAgent = `copilot/1.0.16 (client/github/cli ${process.platform} ${process.version}) term/unknown`
+    const discoveryResp = await fetch("https://api.github.com/copilot_internal/user", {
+      headers: {
+        Authorization: `Bearer ${refresh}`,
+        Accept: "application/json",
+        "User-Agent": cliUserAgent,
+      },
+    })
+    expect(discoveryResp.ok).toBe(true)
+    const discovery = (await discoveryResp.json()) as { endpoints?: { api?: string } }
+    const apiBase = discovery.endpoints!.api!
+
+    const resp = await fetch(`${apiBase}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${refresh}`,
+        "Content-Type": "application/json",
+        "User-Agent": cliUserAgent,
+        "Copilot-Integration-Id": "copilot-developer-cli",
+        "X-GitHub-Api-Version": "2026-01-09",
+        "Openai-Intent": "conversation-agent",
+        "X-Initiator": "user",
+        "X-Interaction-Id": crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        model: "claude-code-4.7-1m",
+        messages: [{ role: "user", content: "Reply with the single word: pong" }],
+        max_tokens: 10,
+        stream: false,
+        reasoning_effort: "xhigh",
+      }),
+    })
+
+    const body = await resp.text()
+    if (!resp.ok) {
+      throw new Error(`Copilot claude-code-4.7-1m xhigh ${apiBase} → ${resp.status}: ${body.slice(0, 500)}`)
+    }
+    const parsed = JSON.parse(body) as { choices?: Array<{ message?: { content?: string } }> }
+    expect(parsed.choices?.[0]?.message?.content).toBeDefined()
+  }, 60_000)
+})
+
+describe("copilot claude-code xhigh variant", () => {
+  test("transform.variants() includes xhigh for claude-code models on copilot", () => {
+    const model = {
+      id: "claude-code-4.7-1m",
+      providerID: "github-copilot",
+      api: { id: "claude-code-4.7-1m", url: "https://api.enterprise.githubcopilot.com", npm: "@ai-sdk/github-copilot" },
+      capabilities: { reasoning: true, temperature: true, attachment: true, toolcall: true, input: { text: true, audio: false, image: false, video: false, pdf: false }, output: { text: true, audio: false, image: false, video: false, pdf: false }, interleaved: false },
+      limit: { context: 1000000, input: 900000, output: 64000 },
+      family: "claude-code",
+      name: "Claude Code 4.7 1M",
+      cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      options: {},
+      headers: {},
+      release_date: "2026-04-01",
+      status: "active" as const,
+      variants: {},
+    }
+    const result = ProviderTransform.variants(model)
+    expect(result).toHaveProperty("xhigh")
+    expect(result).toHaveProperty("low")
+    expect(result).toHaveProperty("medium")
+    expect(result).toHaveProperty("high")
+    expect(result.xhigh).toEqual({ reasoningEffort: "xhigh" })
+  })
+
+  test("transform.variants() does NOT include xhigh for plain claude-opus on copilot", () => {
+    const model = {
+      id: "claude-opus-4.7",
+      providerID: "github-copilot",
+      api: { id: "claude-opus-4.7", url: "https://api.enterprise.githubcopilot.com", npm: "@ai-sdk/github-copilot" },
+      capabilities: { reasoning: true, temperature: true, attachment: true, toolcall: true, input: { text: true, audio: false, image: false, video: false, pdf: false }, output: { text: true, audio: false, image: false, video: false, pdf: false }, interleaved: false },
+      limit: { context: 200000, input: 180000, output: 64000 },
+      family: "claude-opus",
+      name: "Claude Opus 4.7",
+      cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      options: {},
+      headers: {},
+      release_date: "2026-03-01",
+      status: "active" as const,
+      variants: {},
+    }
+    const result = ProviderTransform.variants(model)
+    expect(result).not.toHaveProperty("xhigh")
+    expect(result).toHaveProperty("low")
+    expect(result).toHaveProperty("medium")
+    expect(result).toHaveProperty("high")
+  })
 })

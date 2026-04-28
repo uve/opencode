@@ -4,7 +4,7 @@
  * Wraps Drizzle/SQLite access. Pure synchronous reads/writes — the table is a
  * single-row blob so contention is negligible. No business logic here.
  */
-import { Database, eq } from "@/storage"
+import { Database, eq } from "@/storage/db"
 import { ClientStateTable } from "./schema.sql"
 import { SINGLETON_ID, type ClientState } from "./domain"
 

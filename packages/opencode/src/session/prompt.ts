@@ -904,7 +904,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         !input.variant && ag.variant && same
           ? yield* provider.getModel(model.providerID, model.modelID).pipe(Effect.catchDefect(() => Effect.void))
           : undefined
-      const variant = input.variant ?? (ag.variant && full?.variants?.[ag.variant] ? ag.variant : undefined)
+      // custom-fork: fall back to OPENCODE_DEFAULT_VARIANT from env so the
+      // effort mode can be changed without rebuilding.
+      const envVariant = process.env.OPENCODE_DEFAULT_VARIANT
+      const variant =
+        input.variant ?? (ag.variant && full?.variants?.[ag.variant] ? ag.variant : undefined) ?? envVariant
 
       const info: MessageV2.User = {
         id: input.messageID ?? MessageID.ascending(),

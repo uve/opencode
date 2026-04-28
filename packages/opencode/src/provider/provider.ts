@@ -1363,11 +1363,28 @@ const layer: Layer.Layer<
           }
         }
 
+        // Hardcode: inject claude-opus-4.7-1m-internal (1M context) into github-copilot
+        if (providers[copilotID] && !providers[copilotID].models["claude-opus-4.7-1m-internal"]) {
+          const base = providers[copilotID].models["claude-opus-4.6"] ?? providers[copilotID].models["claude-opus-4.7"]
+          if (base) {
+            providers[copilotID].models["claude-opus-4.7-1m-internal"] = {
+              ...base,
+              id: ModelID.make("claude-opus-4.7-1m-internal"),
+              name: "Claude Opus 4.7 (1M Internal)",
+              api: { ...base.api, id: "claude-opus-4.7-1m-internal" },
+              limit: { context: 1000000, input: 900000, output: 64000 },
+            }
+          }
+        }
+
         // Hardcode: only allow github-copilot provider with specific models
         const ALLOWED_MODELS = new Set([
           "claude-opus-4.6",
           "claude-opus-4.6-1m",
           "claude-opus-4.7",
+          "claude-opus-4.7-1m-internal",
+          "claude-opus-4.7-high",
+          "claude-opus-4.7-xhigh",
           "gpt-5.4",
           "gemini-3.1-pro-preview",
         ])
@@ -1711,7 +1728,12 @@ const layer: Layer.Layer<
       const cfg = yield* config.get()
       if (cfg.model) return parseModel(cfg.model)
 
-      // Hardcode: always default to Claude Opus 4.7 on github-copilot
+      // custom-fork: read default model from env so it can be changed without
+      // rebuilding. Format: "provider/model-id" (e.g. "github-copilot/claude-code-4.7-1m").
+      const envModel = yield* env.get("OPENCODE_DEFAULT_MODEL")
+      if (envModel) return parseModel(envModel)
+
+      // Fallback: Claude Opus 4.7 on github-copilot
       return {
         providerID: ProviderID.make("github-copilot"),
         modelID: ModelID.make("claude-opus-4.7"),

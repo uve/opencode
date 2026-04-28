@@ -541,7 +541,9 @@ export function variants(model: Provider.Model): Record<string, Record<string, a
         return {}
       }
       if (model.id.includes("claude")) {
-        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
+        // custom-fork: claude-opus-4.7 variants on copilot support xhigh effort
+        const efforts = id.includes("claude-opus-4.7") ? [...WIDELY_SUPPORTED_EFFORTS, "xhigh"] : WIDELY_SUPPORTED_EFFORTS
+        return Object.fromEntries(efforts.map((effort) => [effort, { reasoningEffort: effort }]))
       }
       const copilotEfforts = iife(() => {
         if (id.includes("5.1-codex-max") || id.includes("5.2") || id.includes("5.3"))
