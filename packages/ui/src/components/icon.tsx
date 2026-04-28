@@ -109,6 +109,7 @@ const icons = {
   models: `<path fill-rule="evenodd" clip-rule="evenodd" d="M17.5 10C12.2917 10 10 12.2917 10 17.5C10 12.2917 7.70833 10 2.5 10C7.70833 10 10 7.70833 10 2.5C10 7.70833 12.2917 10 17.5 10Z" stroke="currentColor"/>`,
   microphone: `<path d="M10 2.5C8.61929 2.5 7.5 3.61929 7.5 5V10C7.5 11.3807 8.61929 12.5 10 12.5C11.3807 12.5 12.5 11.3807 12.5 10V5C12.5 3.61929 11.3807 2.5 10 2.5Z" stroke="currentColor" stroke-linecap="square"/><path d="M5 9.16667V10C5 12.7614 7.23858 15 10 15C12.7614 15 15 12.7614 15 10V9.16667M10 15V17.5" stroke="currentColor" stroke-linecap="square"/>`,
   headphones: `<path d="M3.75 12.5V10C3.75 6.54822 6.54822 3.75 10 3.75C13.4518 3.75 16.25 6.54822 16.25 10V12.5M3.75 12.5C2.92157 12.5 2.5 13.0596 2.5 13.75V15C2.5 15.6904 2.92157 16.25 3.75 16.25C4.57843 16.25 5 15.6904 5 15V13.75C5 13.0596 4.57843 12.5 3.75 12.5ZM16.25 12.5C15.4216 12.5 15 13.0596 15 13.75V15C15 15.6904 15.4216 16.25 16.25 16.25C17.0784 16.25 17.5 15.6904 17.5 15V13.75C17.5 13.0596 17.0784 12.5 16.25 12.5Z" stroke="currentColor" stroke-linecap="square"/>`,
+  "arrow-undo-down": `<path d="M4.08333 11.0859L1.75 8.7526L4.08333 6.41927M2.33333 8.7526L12.5417 8.7526L12.5417 3.21094L7 3.21094" stroke="currentColor" stroke-width="1" stroke-linecap="square"/>`,
 }
 
 export interface IconProps extends ComponentProps<"svg"> {
@@ -118,7 +119,8 @@ export interface IconProps extends ComponentProps<"svg"> {
 
 export function Icon(props: IconProps) {
   const [local, others] = splitProps(props, ["name", "size", "class", "classList"])
-  const viewBox = () => (local.name === "magnifying-glass" ? "0 0 16 16" : "0 0 20 20")
+  const viewBox = () =>
+    local.name === "magnifying-glass" || local.name === "arrow-undo-down" ? "0 0 16 16" : "0 0 20 20"
   return (
     <div data-component="icon" data-size={local.size || "normal"}>
       <svg
