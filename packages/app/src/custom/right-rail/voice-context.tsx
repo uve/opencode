@@ -373,14 +373,19 @@ function initVoice() {
     rtc = undefined
   }
 
+  // Pause = fully release mic (close RTC). Resume = re-establish.
+  // Avoids holding the audio pipeline (CoreAudio RdData/WrData spam) while idle.
   const pauseRealtime = () => {
-    if (!rtc) return
-    for (const t of rtc.stream.getTracks()) t.enabled = false
+    stopRealtime()
   }
 
   const resumeRealtime = () => {
-    if (!rtc) return
-    for (const t of rtc.stream.getTracks()) t.enabled = true
+    if (!store.stream.active || store.stream.paused) return
+    if (!isLeader) return
+    if (rtc) return
+    void startRealtime().catch((err) => {
+      console.error("[Voice] resume failed:", err)
+    })
   }
 
   // ─── Stream mode public API (engine-agnostic) ───────────────
@@ -545,12 +550,14 @@ function initVoice() {
     channel?.close()
   })
 
-  // Auto-restore stream state from sessionStorage. This makes voice mode
-  // "sticky" across reloads and route changes within the same browser session.
+  // Auto-restore disabled: we no longer auto-open the mic on page load.
+  // sessionStorage flag is cleared so a stale value can't re-grab the mic
+  // silently (Edge remembers permission per-origin and would not prompt,
+  // which caused continuous CoreAudio activity even when not recording).
   onMount(() => {
-    if (wasStreamActive && !store.stream.active) {
-      console.log("[Voice] auto-restoring stream from sessionStorage")
-      void streamActivate()
+    if (wasStreamActive) {
+      console.log("[Voice] clearing stale stream-active flag (no auto-restore)")
+      persistStreamState(false)
     }
   })
 
@@ -648,6 +655,38 @@ function initVoice() {
   onCleanup(() => {
     document.removeEventListener("keydown", onKey, true)
     document.removeEventListener("mousedown", onMouse)
+  })
+
+  // ─── Release mic when tab is hidden / page is being hidden ──
+  // Without this, Edge keeps RTC alive in background tabs, holding the
+  // audio pipeline indefinitely (root cause of CoreAudio overload).
+  // We keep stream.active=true so the UI state survives, but release the
+  // physical mic. On visibilitychange→visible we re-acquire if leader.
+  onMount(() => {
+    const onVisibility = () => {
+      if (typeof document === "undefined") return
+      if (document.hidden) {
+        if (rtc) {
+          console.log("[Voice] tab hidden — releasing mic")
+          stopRealtime()
+        }
+      } else {
+        if (store.stream.active && !store.stream.paused && isLeader && !rtc) {
+          console.log("[Voice] tab visible — re-acquiring mic")
+          void startRealtime().catch((err) => console.error("[Voice] re-acquire failed:", err))
+        }
+      }
+    }
+    const onPageHide = () => {
+      stopRealtime()
+      cancelLeader()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("pagehide", onPageHide)
+    onCleanup(() => {
+      document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("pagehide", onPageHide)
+    })
   })
 
   // ─── Recorder mode (MediaRecorder + Whisper) ────────────────
